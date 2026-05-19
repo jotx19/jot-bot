@@ -475,6 +475,10 @@ async function handleRecruiterEmail(message, history, options = {}) {
 
 /**
  * Route a user message to the correct handler based on classified intent.
+ * @param {string} message
+ * @param {Array<{ role: string, content: string }>} history
+ * @param {{ sessionId?: string, onToken?: (chunk: string) => void, stream?: boolean, task?: object }} [options]
+ *   `task` is set by {@link runChatTurn} (core/runtime.js) for execution lifecycle / future hooks.
  */
 export async function routeMessage(message, history = [], options = {}) {
   if (!process.env.OPENROUTER_API_KEY) {

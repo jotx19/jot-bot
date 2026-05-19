@@ -4,7 +4,7 @@ import {
   Events,
   Partials,
 } from 'discord.js';
-import { routeMessage } from '../core/intent.js';
+import { runChatTurn } from '../core/runtime.js';
 import { storeExchange } from '../core/rag.js';
 import { loadSession, saveSession } from '../core/memory.js';
 
@@ -142,10 +142,22 @@ async function handleDiscordMessage(message, client) {
 
   const history = await getHistory(sessionId);
 
-  const result = await withTyping(message.channel, () =>
-    routeMessage(userText, history, { sessionId, stream: false })
+  const turn = await withTyping(message.channel, () =>
+    runChatTurn({
+      message: userText,
+      history,
+      sessionId,
+      channel: 'discord',
+    })
   );
 
+  if (!turn.ok) {
+    await sendReply(message, 'ERROR', `Something went wrong: ${turn.error}`);
+    console.warn(`[discord] task ${turn.task?.id} FAILED: ${turn.error}`);
+    return;
+  }
+
+  const result = turn.result;
   const reply = result.reply || 'No response.';
   const intent = result.intent || 'CHAT';
 

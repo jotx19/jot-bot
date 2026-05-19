@@ -9,7 +9,7 @@ import { storeExchange } from './core/rag.js';
 import { loadSession, saveSession, clearSession } from './core/memory.js';
 import { loadTools, listTools } from './tools/registry.js';
 import { listScheduled, cancel, restoreScheduled } from './tools/sandbox/scheduler.js';
-import { routeMessage } from './core/intent.js';
+import { runChatTurn } from './core/runtime.js';
 import {
   isAuthEnabled,
   requireAuth,
@@ -185,14 +185,29 @@ app.post('/api/chat', async (req, res) => {
 
       let fullReply = '';
 
-      const result = await routeMessage(message, chatHistory, {
+      const turn = await runChatTurn({
+        message,
+        history: chatHistory,
         sessionId,
+        channel: 'web',
         onToken: (chunk) => {
           fullReply += chunk;
           res.write(`data: ${JSON.stringify({ type: 'token', content: chunk })}\n\n`);
         },
       });
 
+      if (!turn.ok) {
+        res.write(
+          `data: ${JSON.stringify({
+            type: 'error',
+            error: turn.error,
+            task: turn.task,
+          })}\n\n`
+        );
+        return res.end();
+      }
+
+      const result = turn.result;
       const finalReply = result.reply || fullReply;
       indexChatTurn(sessionId, message, finalReply);
       persistSession(sessionId, chatHistory, message, finalReply, result.intent);
@@ -203,18 +218,34 @@ app.post('/api/chat', async (req, res) => {
           intent: result.intent,
           reply: finalReply,
           toolUsed: result.toolUsed ?? null,
+          task: turn.task,
         })}\n\n`
       );
       return res.end();
     }
 
-    const result = await routeMessage(message, chatHistory, { sessionId });
+    const turn = await runChatTurn({
+      message,
+      history: chatHistory,
+      sessionId,
+      channel: 'web',
+    });
+
+    if (!turn.ok) {
+      return res.status(500).json({
+        error: turn.error,
+        task: turn.task,
+      });
+    }
+
+    const result = turn.result;
     indexChatTurn(sessionId, message, result.reply);
     persistSession(sessionId, chatHistory, message, result.reply, result.intent);
     return res.json({
       intent: result.intent,
       reply: result.reply,
       toolUsed: result.toolUsed ?? null,
+      task: turn.task,
     });
   } catch (err) {
     console.error('[api/chat]', err.message);
