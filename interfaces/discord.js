@@ -7,6 +7,7 @@ import {
 import { runChatTurn } from '../core/runtime.js';
 import { storeExchange } from '../core/rag.js';
 import { loadSession, saveSession } from '../core/memory.js';
+import { getDiscordAllowlist } from '../core/users.js';
 
 const INTENT_BADGES = {
   CHAT: '💬',
@@ -19,17 +20,30 @@ const INTENT_BADGES = {
 
 const DISCORD_MAX_LEN = 2000;
 const sessionCache = new Map();
+/** @type {Set<string> | null} */
+let allowlistCache = null;
+let allowlistLoadedAt = 0;
+const ALLOWLIST_TTL_MS = 60_000;
 
-/**
- * Build per-user Discord session id (shared MongoDB with web).
- */
+async function getAllowlistCached() {
+  const now = Date.now();
+  if (allowlistCache && now - allowlistLoadedAt < ALLOWLIST_TTL_MS) {
+    return allowlistCache;
+  }
+  allowlistCache = await getDiscordAllowlist();
+  allowlistLoadedAt = now;
+  return allowlistCache;
+}
+
+export function invalidateDiscordAllowlistCache() {
+  allowlistCache = null;
+  allowlistLoadedAt = 0;
+}
+
 function getSessionId(authorId) {
   return `${authorId}-discord`;
 }
 
-/**
- * Load chat history from cache or MongoDB.
- */
 async function getHistory(sessionId) {
   if (sessionCache.has(sessionId)) {
     return sessionCache.get(sessionId);
@@ -39,9 +53,6 @@ async function getHistory(sessionId) {
   return loaded;
 }
 
-/**
- * Persist turn to MongoDB and refresh cache.
- */
 async function persistTurn(sessionId, history, message, reply, intent) {
   const updated = [
     ...history,
@@ -52,17 +63,11 @@ async function persistTurn(sessionId, history, message, reply, intent) {
   await saveSession(sessionId, updated);
 }
 
-/**
- * Strip bot mention from message text.
- */
 function stripMention(content, client) {
   const mentionRegex = new RegExp(`<@!?${client.user.id}>`, 'g');
   return content.replace(mentionRegex, '').trim();
 }
 
-/**
- * Whether the bot should respond to this message.
- */
 function shouldRespond(message, client) {
   if (message.author.bot) return false;
   const isDm = !message.guild;
@@ -70,17 +75,40 @@ function shouldRespond(message, client) {
   return isDm || isMentioned;
 }
 
-/**
- * Prefix reply with intent emoji badge.
- */
+async function isAuthorizedDiscordUser(message) {
+  const allowedUsers = await getAllowlistCached();
+
+  if (!allowedUsers.size) {
+    return { ok: false, reason: 'no_allowlist' };
+  }
+
+  if (!allowedUsers.has(message.author.id)) {
+    return { ok: false, reason: 'user' };
+  }
+
+  const guildRaw =
+    process.env.DISCORD_ALLOWED_GUILD_IDS?.trim() ||
+    process.env.DISCORD_GUILD_ID?.trim();
+  if (message.guild && guildRaw) {
+    const allowedGuilds = new Set(
+      guildRaw
+        .split(/[,\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+    if (allowedGuilds.size && !allowedGuilds.has(message.guild.id)) {
+      return { ok: false, reason: 'guild' };
+    }
+  }
+
+  return { ok: true };
+}
+
 function formatWithBadge(intent, text) {
   const badge = INTENT_BADGES[intent] || '💬';
   return `${badge} ${text}`;
 }
 
-/**
- * Split long text for Discord's 2000 character limit.
- */
 function splitForDiscord(text, maxLen = DISCORD_MAX_LEN - 10) {
   if (text.length <= maxLen) return [text];
 
@@ -98,9 +126,6 @@ function splitForDiscord(text, maxLen = DISCORD_MAX_LEN - 10) {
   return chunks;
 }
 
-/**
- * Keep typing indicator alive during long LLM calls.
- */
 async function withTyping(channel, work) {
   await channel.sendTyping();
   const typingTimer = setInterval(() => {
@@ -114,9 +139,6 @@ async function withTyping(channel, work) {
   }
 }
 
-/**
- * Send one or more Discord messages (chunked).
- */
 async function sendReply(message, intent, replyText) {
   const formatted = formatWithBadge(intent, replyText);
   const chunks = splitForDiscord(formatted);
@@ -131,9 +153,6 @@ async function sendReply(message, intent, replyText) {
   }
 }
 
-/**
- * Process one user message through the same pipeline as web chat.
- */
 async function handleDiscordMessage(message, client) {
   const sessionId = getSessionId(message.author.id);
   const userText = stripMention(message.content, client);
@@ -171,9 +190,6 @@ async function handleDiscordMessage(message, client) {
   console.log(`[discord] ${intent} — user ${message.author.id}`);
 }
 
-/**
- * Start the Discord bot (optional interface).
- */
 export async function startDiscordBot() {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) {
@@ -191,12 +207,43 @@ export async function startDiscordBot() {
     partials: [Partials.Channel],
   });
 
-  client.once(Events.ClientReady, (c) => {
+  client.once(Events.ClientReady, async (c) => {
     console.log(`[discord] bot online as ${c.user.tag}`);
+    const allowed = await getAllowlistCached();
+    if (allowed.size) {
+      console.log(`[discord] allowlist: ${[...allowed].join(', ')} (${allowed.size} user(s))`);
+    } else {
+      console.warn(
+        '[discord] WARNING: no Discord user IDs in Settings — bot will reject chats until configured'
+      );
+    }
   });
 
   client.on(Events.MessageCreate, async (message) => {
     if (!shouldRespond(message, client)) return;
+
+    const auth = await isAuthorizedDiscordUser(message);
+    if (!auth.ok) {
+      console.log(
+        `[discord] blocked ${auth.reason} — user ${message.author.id}` +
+          (message.guild ? ` guild ${message.guild.id}` : ' (DM)')
+      );
+      if (process.env.DISCORD_AUTH_SILENT !== 'true') {
+        try {
+          const tip =
+            auth.reason === 'no_allowlist'
+              ? '🔒 Bot not configured. Owner: open Settings on the web app and set your Discord User ID.'
+              : '🔒 Not authorized. This bot is private.';
+          await message.reply({
+            content: tip,
+            allowedMentions: { repliedUser: false },
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+      return;
+    }
 
     try {
       await handleDiscordMessage(message, client);
@@ -208,7 +255,7 @@ export async function startDiscordBot() {
           allowedMentions: { repliedUser: false },
         });
       } catch {
-        /* ignore send failures */
+        /* ignore */
       }
     }
   });
@@ -219,4 +266,3 @@ export async function startDiscordBot() {
 
   await client.login(token);
 }
-

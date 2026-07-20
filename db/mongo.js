@@ -18,6 +18,7 @@ const relationSchema = new mongoose.Schema({
 
 const sessionSchema = new mongoose.Schema({
   sessionId: { type: String, required: true, unique: true, index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
   messages: {
     type: [
       {
@@ -42,10 +43,37 @@ const sandboxScriptSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
+/**
+ * Registered accounts — Discord notify/allowlist live here (not only .env).
+ */
+const userSchema = new mongoose.Schema({
+  username: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true,
+    minlength: 3,
+    maxlength: 32,
+  },
+  passwordHash: { type: String, required: true },
+  settings: {
+    discordUserId: { type: String, default: '', trim: true },
+    notifyChannelId: { type: String, default: '', trim: true },
+    notifyScheduler: { type: Boolean, default: true },
+    notifyAlways: { type: Boolean, default: true },
+    botName: { type: String, default: '', trim: true },
+  },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+userSchema.index({ 'settings.discordUserId': 1 });
+
 export const Entity = mongoose.model('Entity', entitySchema);
 export const Relation = mongoose.model('Relation', relationSchema);
 export const Session = mongoose.model('Session', sessionSchema);
 export const SandboxScript = mongoose.model('SandboxScript', sandboxScriptSchema);
+export const User = mongoose.model('User', userSchema);
 
 /**
  * Connect to MongoDB Atlas using MONGODB_URI from environment.

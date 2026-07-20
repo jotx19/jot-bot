@@ -74,13 +74,45 @@ async function streamChat(message, sessionId, history, onToken, onDone, onError)
   }
 }
 
-function ChatApp({ onLogout }) {
+function ChatApp({ onLogout, discordInviteUrl }) {
   const [sessionId] = useState(getSessionId);
   const [messages, setMessages] = useState([]);
   const [isThinking, setIsThinking] = useState(false);
   const [lastToolUsed, setLastToolUsed] = useState(null);
   const [error, setError] = useState(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [inviteDismissed, setInviteDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('tinyjot-discord-invite-dismissed-v2') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [inviteUrl, setInviteUrl] = useState(discordInviteUrl || null);
+
+  useEffect(() => {
+    setInviteUrl(discordInviteUrl || null);
+  }, [discordInviteUrl]);
+
+  // Belt-and-suspenders: refresh invite link if parent passed null (stale /api/auth/me)
+  useEffect(() => {
+    if (inviteUrl) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/me', API_OPTS);
+        const data = await res.json();
+        if (!cancelled && data.discordInviteUrl) {
+          setInviteUrl(data.discordInviteUrl);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -236,6 +268,16 @@ function ChatApp({ onLogout }) {
   }, [onLogout]);
 
   const canClear = messages.length > 0 && !isThinking;
+  const showInvite = Boolean(inviteUrl) && !inviteDismissed;
+
+  const dismissInvite = () => {
+    setInviteDismissed(true);
+    try {
+      localStorage.setItem('tinyjot-discord-invite-dismissed-v2', '1');
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
     <div className="app">
@@ -245,6 +287,20 @@ function ChatApp({ onLogout }) {
           <h1>tiny<span>jot</span></h1>
         </div>
         <div className="header-actions">
+          {inviteUrl && (
+            <a
+              href={inviteUrl}
+              className="discord-invite-btn"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Add bot to Discord"
+            >
+              Add to Discord
+            </a>
+          )}
+          <a href="/settings.html" className="clear-chat-btn" aria-label="Settings">
+            Settings
+          </a>
           <button
             type="button"
             className="clear-chat-btn"
@@ -269,6 +325,28 @@ function ChatApp({ onLogout }) {
         </div>
       </header>
 
+      {showInvite && (
+        <div className="discord-banner">
+          <div className="discord-banner-text">
+            <strong>Add bot to your Discord</strong>
+            <span>Invite jotbot to a server, then chat with @mentions.</span>
+          </div>
+          <div className="discord-banner-actions">
+            <a
+              href={inviteUrl}
+              className="discord-banner-cta"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Add to Discord
+            </a>
+            <button type="button" className="discord-banner-dismiss" onClick={dismissInvite}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="error-banner">
           <Icon name="alert" size={14} />
@@ -287,6 +365,8 @@ function App() {
     checking: true,
     required: false,
     authenticated: false,
+    userAuth: false,
+    discordInviteUrl: null,
   });
 
   const checkAuth = useCallback(async () => {
@@ -297,9 +377,17 @@ function App() {
         checking: false,
         required: Boolean(data.authRequired),
         authenticated: Boolean(data.authenticated),
+        userAuth: Boolean(data.userAuth),
+        discordInviteUrl: data.discordInviteUrl || null,
       });
     } catch {
-      setAuth({ checking: false, required: true, authenticated: false });
+      setAuth({
+        checking: false,
+        required: true,
+        authenticated: false,
+        userAuth: true,
+        discordInviteUrl: null,
+      });
     }
   }, []);
 
@@ -308,7 +396,12 @@ function App() {
   }, [checkAuth]);
 
   const handleLogout = useCallback(() => {
-    setAuth({ checking: false, required: true, authenticated: false });
+    setAuth((prev) => ({
+      ...prev,
+      checking: false,
+      required: true,
+      authenticated: false,
+    }));
   }, []);
 
   if (auth.checking) {
@@ -322,14 +415,18 @@ function App() {
   if (auth.required && !auth.authenticated) {
     return (
       <LoginGate
-        onAuthenticated={() =>
-          setAuth({ checking: false, required: true, authenticated: true })
-        }
+        userAuth={auth.userAuth}
+        onAuthenticated={() => {
+          // Re-fetch /api/auth/me so discordInviteUrl and user are fresh
+          checkAuth();
+        }}
       />
     );
   }
 
-  return <ChatApp onLogout={handleLogout} />;
+  return (
+    <ChatApp onLogout={handleLogout} discordInviteUrl={auth.discordInviteUrl} />
+  );
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

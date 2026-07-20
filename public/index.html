@@ -125,6 +125,117 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .discord-invite-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: inherit;
+      color: #fff;
+      background: #5865f2;
+      border: 1px solid transparent;
+      border-radius: 9999px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .discord-invite-btn:hover {
+      opacity: 0.9;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .discord-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      padding: 0.85rem 1rem;
+      margin: 0.75rem 0 0;
+      border: 1px solid #3a3f6b;
+      border-radius: 12px;
+      background: rgba(88, 101, 242, 0.12);
+      flex-shrink: 0;
+    }
+
+    .discord-banner-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      min-width: 0;
+    }
+
+    .discord-banner-text strong {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .discord-banner-text span {
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .discord-banner-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .discord-banner-cta {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.45rem 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      font-family: inherit;
+      color: #fff;
+      background: #5865f2;
+      border-radius: 9999px;
+      text-decoration: none;
+    }
+
+    .discord-banner-cta:hover {
+      opacity: 0.9;
+      color: #fff;
+      text-decoration: none;
+    }
+
+    .discord-banner-dismiss {
+      padding: 0.45rem 0.65rem;
+      font-size: 0.75rem;
+      font-family: inherit;
+      color: var(--muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+    }
+
+    .discord-banner-dismiss:hover {
+      color: var(--text);
+    }
+
+    @media (max-width: 560px) {
+      .discord-banner {
+        align-items: flex-start;
+      }
+
+      .discord-banner-actions {
+        width: 100%;
+      }
+
+      .discord-banner-cta {
+        flex: 1;
+        justify-content: center;
+      }
+    }
+
     .chat-window {
       flex: 1;
       overflow-y: auto;
@@ -754,6 +865,23 @@
     .auth-submit:disabled {
       opacity: 0.45;
       cursor: not-allowed;
+    }
+
+    .auth-footer {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .auth-footer a {
+      color: var(--imessage-blue);
+      text-decoration: none;
+    }
+
+    a.clear-chat-btn {
+      text-decoration: none;
+      color: inherit;
     }
   </style>
 </head>

@@ -166,17 +166,21 @@ export async function getMemoryContext(message) {
  * Persist full chat session (keeps last N messages lean for M0 tier).
  * @param {string} sessionId
  * @param {Array<{role: string, content: string, intent?: string}>} messages
+ * @param {string | null} [userId]
  */
-export async function saveSession(sessionId, messages) {
+export async function saveSession(sessionId, messages, userId = null) {
   if (!isMongoReady() || !sessionId) return;
 
   const trimmed = messages.slice(-MAX_SESSION_MESSAGES);
 
   try {
+    const $set = { messages: trimmed, updatedAt: new Date() };
+    if (userId) $set.userId = userId;
+
     await Session.findOneAndUpdate(
       { sessionId },
       {
-        $set: { messages: trimmed, updatedAt: new Date() },
+        $set,
         $setOnInsert: { createdAt: new Date() },
       },
       { upsert: true }

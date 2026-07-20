@@ -8,6 +8,7 @@ import {
   markUnscheduled,
   listScheduledRecords,
 } from './store.js';
+import { notifySchedulerRun } from './notify.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = path.join(__dirname, 'state');
@@ -47,9 +48,23 @@ function startInterval(name, scriptPath, intervalMs, runFn) {
   const tick = async () => {
     entry.lastRun = new Date().toISOString();
     try {
-      await runFn(scriptPath);
+      const result = await runFn(scriptPath);
+      entry.lastResult = {
+        exitCode: result?.exitCode ?? null,
+        timedOut: Boolean(result?.timedOut),
+        stdout: String(result?.stdout || '').slice(0, 4000),
+        stderr: String(result?.stderr || '').slice(0, 2000),
+        at: entry.lastRun,
+      };
+      notifySchedulerRun(name, result).catch((err) => {
+        console.warn(`[scheduler] notify ${name}:`, err.message);
+      });
     } catch (err) {
       console.warn(`[scheduler] ${name} run failed:`, err.message);
+      entry.lastResult = { error: err.message, at: entry.lastRun };
+      notifySchedulerRun(name, null, err.message).catch((notifyErr) => {
+        console.warn(`[scheduler] notify ${name}:`, notifyErr.message);
+      });
     }
   };
 
@@ -88,6 +103,7 @@ export function listScheduled() {
     scriptPath: e.scriptPath,
     intervalMs: e.intervalMs,
     lastRun: e.lastRun,
+    lastResult: e.lastResult || null,
   }));
 }
 
