@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { TinyjotLogo } from "@/components/tinyjot-logo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -184,7 +185,7 @@ export default function LoginPage() {
           />
           <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-10">
-            <p className="text-sm font-medium text-white/80">tinyjot</p>
+            <TinyjotLogo size="lg" className="mb-3" />
             <p className="mt-2 max-w-sm text-3xl font-semibold leading-snug tracking-tight text-white">
               Your personal AI, ready when you are.
             </p>
@@ -202,6 +203,9 @@ export default function LoginPage() {
               sizes="100vw"
             />
             <div className="absolute inset-0 bg-linear-to-t from-[#F7F5F1] to-transparent dark:from-[#0c0c0c]" />
+            <div className="absolute top-4 left-4">
+              <TinyjotLogo size="md" />
+            </div>
           </div>
 
           <div className="absolute top-4 right-4 z-20">
@@ -211,10 +215,7 @@ export default function LoginPage() {
           <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12">
             <div className="mx-auto w-full max-w-88 space-y-6">
               <div>
-                <p className="text-sm font-semibold tracking-tight">
-                  tiny
-                  <span className="font-medium text-muted-foreground">jot</span>
-                </p>
+                <TinyjotLogo size="md" />
                 <h1 className="mt-4 text-2xl font-semibold tracking-tight">
                   {mode === "signin" ? "Sign in" : "Register"}
                 </h1>

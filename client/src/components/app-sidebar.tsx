@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { TinyjotLogo } from "@/components/tinyjot-logo";
 import {
   Sidebar,
   SidebarContent,
@@ -248,10 +249,8 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
         className="z-40 transform-gpu will-change-transform"
       >
         <SidebarHeader className="gap-3">
-          <div className="hidden w-full items-center justify-center px-3 pt-2 md:flex">
-            <p className="text-lg font-semibold tracking-tight">
-              tiny<span className="font-medium text-muted-foreground">jot</span>
-            </p>
+          <div className="flex w-full gap-2 bg-black/50 rounded-md items-center justify-center px-3 md:mt-1">
+            <TinyjotLogo size="lg" /> <span className="text-sm font-semibold">tinyjot</span>
           </div>
 
           <div className="px-1.5 pt-1 md:mt-5 md:pt-0">

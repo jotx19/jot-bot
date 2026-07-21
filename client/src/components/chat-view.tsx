@@ -16,6 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function formatRemaining(ms: number): string {
   if (ms <= 0) return "0h 0m 0s";
@@ -324,9 +325,12 @@ export function ChatView() {
           }
         >
           {isLoading && (
-            <p className="text-center text-sm text-muted-foreground">
-              Restoring…
-            </p>
+            <div className="mx-auto w-full max-w-2xl space-y-3 px-1 py-6">
+              <Skeleton className="ml-auto h-11 w-[45%] rounded-2xl" />
+              <Skeleton className="h-16 w-[70%] rounded-2xl" />
+              <Skeleton className="ml-auto h-10 w-[35%] rounded-2xl" />
+              <Skeleton className="h-24 w-[80%] rounded-2xl" />
+            </div>
           )}
           {empty && (
             <EmptyChat

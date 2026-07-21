@@ -136,34 +136,51 @@ export default function AutomationPage() {
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-2 sm:gap-3">
-          <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Total runs
-            </p>
-            <p className="mt-2 font-mono text-3xl font-semibold tracking-tight tabular-nums">
-              {isLoading ? "—" : stats.totalRuns}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {stats.totalFails
-                ? `${stats.totalFails} failed`
-                : "Across all scripts"}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Scripts
-            </p>
-            <p className="mt-2 font-mono text-3xl font-semibold tracking-tight tabular-nums">
-              {isLoading ? "—" : stats.scripts}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {stats.scheduled
-                ? `${stats.scheduled} scheduled`
-                : stats.lastRunAt
-                  ? `Last run ${formatUpdated(stats.lastRunAt)}`
-                  : "None scheduled"}
-            </p>
-          </div>
+          {isLoading ? (
+            <>
+              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="mt-3 h-9 w-16" />
+                <Skeleton className="mt-2 h-3 w-28" />
+              </div>
+              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="mt-3 h-9 w-12" />
+                <Skeleton className="mt-2 h-3 w-24" />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  Total runs
+                </p>
+                <p className="mt-2 font-mono text-3xl font-semibold tracking-tight tabular-nums">
+                  {stats.totalRuns}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {stats.totalFails
+                    ? `${stats.totalFails} failed`
+                    : "Across all scripts"}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  Scripts
+                </p>
+                <p className="mt-2 font-mono text-3xl font-semibold tracking-tight tabular-nums">
+                  {stats.scripts}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {stats.scheduled
+                    ? `${stats.scheduled} scheduled`
+                    : stats.lastRunAt
+                      ? `Last run ${formatUpdated(stats.lastRunAt)}`
+                      : "None scheduled"}
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         {isLoading ? (
