@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { recordScriptRun } from './store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
@@ -11,6 +12,11 @@ const DEFAULT_TIMEOUT = 15000;
 function ensureDirs() {
   fs.mkdirSync(SCRIPTS_DIR, { recursive: true });
   fs.mkdirSync(STATE_DIR, { recursive: true });
+}
+
+function nameFromScriptPath(scriptPath) {
+  const base = path.basename(scriptPath || '', '.mjs');
+  return base || null;
 }
 
 function runChild(scriptPath, timeoutMs) {
@@ -29,8 +35,12 @@ function runChild(scriptPath, timeoutMs) {
       child.kill('SIGTERM');
     }, timeoutMs);
 
-    child.stdout?.on('data', (d) => { stdout += d.toString(); });
-    child.stderr?.on('data', (d) => { stderr += d.toString(); });
+    child.stdout?.on('data', (d) => {
+      stdout += d.toString();
+    });
+    child.stderr?.on('data', (d) => {
+      stderr += d.toString();
+    });
 
     child.on('close', (code) => {
       clearTimeout(timer);
@@ -39,9 +49,25 @@ function runChild(scriptPath, timeoutMs) {
 
     child.on('error', (err) => {
       clearTimeout(timer);
-      resolve({ scriptPath, stdout, stderr: stderr + err.message, exitCode: 1, timedOut });
+      resolve({
+        scriptPath,
+        stdout,
+        stderr: stderr + err.message,
+        exitCode: 1,
+        timedOut,
+      });
     });
   });
+}
+
+async function trackRun(scriptPath, result) {
+  const name = nameFromScriptPath(scriptPath);
+  if (!name) return result;
+  await recordScriptRun(name, {
+    exitCode: result?.exitCode ?? 1,
+    timedOut: Boolean(result?.timedOut),
+  });
+  return result;
 }
 
 export async function writeAndRun(name, code, timeoutMs = DEFAULT_TIMEOUT) {
@@ -49,10 +75,14 @@ export async function writeAndRun(name, code, timeoutMs = DEFAULT_TIMEOUT) {
   const scriptPath = path.join(SCRIPTS_DIR, `${name}.mjs`);
   fs.writeFileSync(scriptPath, code, 'utf8');
   console.log(`[sandbox] wrote ${scriptPath}`);
-  return runChild(scriptPath, timeoutMs);
+  const result = await runChild(scriptPath, timeoutMs);
+  await trackRun(scriptPath, result);
+  return result;
 }
 
 export async function runScript(scriptPath, timeoutMs = DEFAULT_TIMEOUT) {
   ensureDirs();
-  return runChild(scriptPath, timeoutMs);
+  const result = await runChild(scriptPath, timeoutMs);
+  await trackRun(scriptPath, result);
+  return result;
 }

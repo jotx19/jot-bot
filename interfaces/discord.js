@@ -8,6 +8,8 @@ import { runChatTurn } from '../core/runtime.js';
 import { storeExchange } from '../core/rag.js';
 import { loadSession, saveSession } from '../core/memory.js';
 import { getDiscordAllowlist } from '../core/users.js';
+import { runWithLlmCredentials, credsFromUserDoc } from '../core/llm-context.js';
+import { User, isMongoReady } from '../db/mongo.js';
 
 const INTENT_BADGES = {
   CHAT: '💬',
@@ -161,13 +163,29 @@ async function handleDiscordMessage(message, client) {
 
   const history = await getHistory(sessionId);
 
-  const turn = await withTyping(message.channel, () =>
-    runChatTurn({
-      message: userText,
-      history,
-      sessionId,
-      channel: 'discord',
-    })
+  let llmCreds = { fromUser: false };
+  if (isMongoReady()) {
+    try {
+      const linked = await User.findOne({
+        'settings.discordUserId': String(message.author.id),
+      }).lean();
+      if (linked) {
+        llmCreds = credsFromUserDoc(linked);
+      }
+    } catch {
+      /* use env fallback */
+    }
+  }
+
+  const turn = await runWithLlmCredentials(llmCreds, () =>
+    withTyping(message.channel, () =>
+      runChatTurn({
+        message: userText,
+        history,
+        sessionId,
+        channel: 'discord',
+      })
+    )
   );
 
   if (!turn.ok) {

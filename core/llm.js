@@ -1,15 +1,14 @@
 import fetch from 'node-fetch';
 import { getIdentityPrompt, getBotName } from './persona.js';
+import { getLlmApiKey, getLlmModel } from './llm-context.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 /** OpenRouter auto-router — picks any available free model */
 const DEFAULT_MODEL = 'openrouter/free';
 
-/** Base system prompt applied to all user-facing LLM calls (merged with per-call prompts). */
-export const DEFAULT_SYSTEM_PROMPT = `${getIdentityPrompt()}
-
-You help with any task they ask including finding publicly available business contact information, professional outreach, job searching, and career help.
+/** Shared task instructions appended after identity (evaluated per call). */
+const TASK_SYSTEM_PROMPT = `You help with any task they ask including finding publicly available business contact information, professional outreach, job searching, and career help.
 
 For job postings and recruiter emails:
 - When the user shares a job posting, use the recruiter tool flow to search the web for hiring contacts
@@ -23,9 +22,13 @@ Be direct and actually helpful. Do not add unnecessary warnings or refuse reason
  * Merge base system prompt with task-specific instructions.
  */
 export function buildSystemPrompt(taskPrompt = '') {
-  if (!taskPrompt?.trim()) return DEFAULT_SYSTEM_PROMPT;
-  return `${DEFAULT_SYSTEM_PROMPT}\n\n${taskPrompt.trim()}`;
+  const base = `${getIdentityPrompt()}\n\n${TASK_SYSTEM_PROMPT}`;
+  if (!taskPrompt?.trim()) return base;
+  return `${base}\n\n${taskPrompt.trim()}`;
 }
+
+/** @deprecated Prefer buildSystemPrompt() so persona is request-scoped. */
+export const DEFAULT_SYSTEM_PROMPT = TASK_SYSTEM_PROMPT;
 
 const MAX_RETRIES = 3;
 
@@ -35,7 +38,7 @@ const MIN_GAP_MS = Number(process.env.OPENROUTER_MIN_GAP_MS) || 2000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function getModel() {
-  return process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
+  return getLlmModel() || DEFAULT_MODEL;
 }
 
 /**
@@ -75,7 +78,7 @@ function finalErrorMessage(status, detail) {
 function getHeaders() {
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+    Authorization: `Bearer ${getLlmApiKey()}`,
     'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
     'X-Title': getBotName(),
   };
@@ -152,8 +155,10 @@ async function consumeStream(body, onToken) {
 export async function callLLM(messages, systemPrompt = '', options = {}) {
   const { stream = true, onToken, includeBasePrompt = true } = options;
 
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error('OPENROUTER_API_KEY is not configured');
+  if (!getLlmApiKey()) {
+    throw new Error(
+      'OpenRouter API key is not configured. Add your key in Settings → BYOK, or set OPENROUTER_API_KEY on the server.'
+    );
   }
 
   const apiMessages = [];

@@ -30,7 +30,7 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:3000**
+Open **http://localhost:3000** (Next.js UI). API runs on **http://localhost:5050**.
 
 1. **Register** an account  
 2. Open **Settings** → set your Discord User ID + notify Channel ID  
@@ -93,12 +93,12 @@ Messages are classified and routed:
 ## Project layout
 
 ```
-server.js           Express API + static UI
+server.js           Express API
+client/             Next.js chat UI
 core/               LLM, intent, memory, auth, users
 db/                 MongoDB (+ Qdrant client)
 tools/              Built-in tools + sandbox scheduler
 interfaces/         Discord bot
-public/             Web chat, settings, register
 ```
 
 ## API (high level)
@@ -113,6 +113,16 @@ public/             Web chat, settings, register
 | `POST` | `/api/chat` | Chat (JSON or SSE stream) |
 | `GET` | `/api/session/:id` | Restore chat history |
 
-## License
+## Next.js client
 
-Use and modify for your own personal runtime. Add a `LICENSE` file if you publish under a specific license.
+The chat UI lives in [`client/`](./client):
+
+```bash
+# API (:5050)
+npm run dev
+
+# UI (:3000) — separate terminal
+cd client && npm run dev
+```
+
+See [client/README.md](./client/README.md) for Google JWT auth, streaming, and env setup.

@@ -19,3 +19,8 @@ tools/sandbox/scripts/*.cjs.map.gz
 tools/sandbox/scripts/*.mjs.map.gz
 *.log
 .DS_Store
+
+# keep client node_modules local
+client/node_modules
+client/.next
+client/.env.local

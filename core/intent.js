@@ -1,4 +1,5 @@
 import { callLLM } from './llm.js';
+import { getLlmApiKey } from './llm-context.js';
 import { retrieveContext, formatContextBlock } from './rag.js';
 import { getMemoryContext, learnFromMessage } from './memory.js';
 import { getBotName } from './persona.js';
@@ -481,9 +482,9 @@ async function handleRecruiterEmail(message, history, options = {}) {
  *   `task` is set by {@link runChatTurn} (core/runtime.js) for execution lifecycle / future hooks.
  */
 export async function routeMessage(message, history = [], options = {}) {
-  if (!process.env.OPENROUTER_API_KEY) {
+  if (!getLlmApiKey()) {
     const reply =
-      'OpenRouter is not configured. Copy `.env.example` to `.env`, set OPENROUTER_API_KEY, then restart the server (`npm start`).';
+      'OpenRouter is not configured. Add your API key in Settings → BYOK, or set OPENROUTER_API_KEY on the server.';
     if (options.onToken) options.onToken(reply);
     return { intent: 'CHAT', reply, toolUsed: null };
   }

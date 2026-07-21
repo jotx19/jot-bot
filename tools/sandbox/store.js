@@ -157,6 +157,34 @@ export async function listScripts() {
   return SandboxScript.find().sort({ scheduled: -1, updatedAt: -1 }).lean();
 }
 
+/**
+ * Increment run stats after a sandbox execution.
+ * @param {string} name
+ * @param {{ exitCode?: number | null, timedOut?: boolean, error?: string | null }} [meta]
+ */
+export async function recordScriptRun(name, meta = {}) {
+  if (!isMongoReady() || !name) return;
+  const exitCode = meta.exitCode ?? (meta.error ? 1 : 0);
+  const failed = Boolean(meta.error) || Boolean(meta.timedOut) || exitCode !== 0;
+  try {
+    await SandboxScript.findOneAndUpdate(
+      { name },
+      {
+        $inc: {
+          runCount: 1,
+          ...(failed ? { failCount: 1 } : {}),
+        },
+        $set: {
+          lastRunAt: new Date(),
+          lastExitCode: exitCode,
+        },
+      }
+    );
+  } catch (err) {
+    console.warn('[sandbox] recordScriptRun:', err.message);
+  }
+}
+
 export async function listScheduledRecords() {
   if (!isMongoReady()) return [];
   return SandboxScript.find({ scheduled: true, intervalMs: { $gt: 0 } }).lean();

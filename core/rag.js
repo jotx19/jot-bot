@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import fetch from 'node-fetch';
 import { isFreeTierModel } from './llm.js';
+import { getLlmApiKey } from './llm-context.js';
 import { upsertEmbedding, searchSimilar, ensureCollection } from '../db/qdrant.js';
 
 const EMBEDDINGS_URL = 'https://openrouter.ai/api/v1/embeddings';
@@ -12,7 +13,7 @@ const EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 function getHeaders() {
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+    Authorization: `Bearer ${getLlmApiKey()}`,
     'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
     'X-Title': process.env.BOT_NAME || 'tinyjot',
   };
@@ -24,8 +25,8 @@ function getHeaders() {
  * @returns {Promise<number[]>}
  */
 export async function embedText(text) {
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error('OPENROUTER_API_KEY is not configured');
+  if (!getLlmApiKey()) {
+    throw new Error('OpenRouter API key is not configured');
   }
 
   const input = text.slice(0, 8000);

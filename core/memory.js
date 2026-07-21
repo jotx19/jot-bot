@@ -1,5 +1,5 @@
 import { callLLM } from './llm.js';
-import { Entity, Relation, Session, isMongoReady } from '../db/mongo.js';
+import { Entity, Relation, Session, User, isMongoReady } from '../db/mongo.js';
 
 const MAX_SESSION_MESSAGES = 50;
 const EXTRACT_SYSTEM = `Extract structured knowledge from the user message.
@@ -164,24 +164,35 @@ export async function getMemoryContext(message) {
 
 /**
  * Persist full chat session (keeps last N messages lean for M0 tier).
+ * Sets expiresAt from the user's chat retention so MongoDB TTL can delete it.
  * @param {string} sessionId
  * @param {Array<{role: string, content: string, intent?: string}>} messages
  * @param {string | null} [userId]
+ * @param {number | null} [retentionDays]
  */
-export async function saveSession(sessionId, messages, userId = null) {
+export async function saveSession(sessionId, messages, userId = null, retentionDays = null) {
   if (!isMongoReady() || !sessionId) return;
 
   const trimmed = messages.slice(-MAX_SESSION_MESSAGES);
+  const now = new Date();
 
   try {
-    const $set = { messages: trimmed, updatedAt: new Date() };
+    let days = retentionDays;
+    if (days == null && userId) {
+      const user = await User.findById(userId).select('settings.chatRetentionDays').lean();
+      days = user?.settings?.chatRetentionDays;
+    }
+    const retention = normalizeRetentionDays(days);
+    const expiresAt = expiresAtFrom(now, retention);
+
+    const $set = { messages: trimmed, updatedAt: now, expiresAt };
     if (userId) $set.userId = userId;
 
     await Session.findOneAndUpdate(
       { sessionId },
       {
         $set,
-        $setOnInsert: { createdAt: new Date() },
+        $setOnInsert: { createdAt: now },
       },
       { upsert: true }
     );
@@ -208,6 +219,30 @@ export async function loadSession(sessionId) {
 }
 
 /**
+ * Load session doc metadata (for chat topbar timer).
+ * @param {string} sessionId
+ * @returns {Promise<{ messages: Array, updatedAt: Date | null, expiresAt: Date | null } | null>}
+ */
+export async function loadSessionDoc(sessionId) {
+  if (!isMongoReady() || !sessionId) return null;
+
+  try {
+    const doc = await Session.findOne({ sessionId })
+      .select('messages updatedAt expiresAt')
+      .lean();
+    if (!doc) return null;
+    return {
+      messages: doc.messages ?? [],
+      updatedAt: doc.updatedAt || null,
+      expiresAt: doc.expiresAt || null,
+    };
+  } catch (err) {
+    console.warn('[memory] loadSessionDoc failed:', err.message);
+    return null;
+  }
+}
+
+/**
  * Remove all messages for a session.
  * @param {string} sessionId
  */
@@ -219,6 +254,207 @@ export async function clearSession(sessionId) {
   } catch (err) {
     console.warn('[memory] clearSession failed:', err.message);
     throw err;
+  }
+}
+
+const RETENTION_DAYS = new Set([7, 11, 15]);
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * @param {unknown} days
+ * @returns {7 | 11 | 15}
+ */
+export function normalizeRetentionDays(days) {
+  const n = Number(days);
+  return RETENTION_DAYS.has(n) ? n : 7;
+}
+
+/**
+ * @param {Date | string | number} from
+ * @param {number} days
+ */
+function expiresAtFrom(from, days) {
+  const base = from instanceof Date ? from.getTime() : new Date(from).getTime();
+  const t = Number.isFinite(base) ? base : Date.now();
+  return new Date(t + normalizeRetentionDays(days) * MS_PER_DAY);
+}
+
+function userSessionFilter(userId) {
+  return {
+    $or: [{ userId }, { sessionId: new RegExp(`^${String(userId)}:`) }],
+  };
+}
+
+/**
+ * Delete chats past retention (expiresAt or updatedAt cutoff).
+ * @param {string} userId
+ * @param {number} [days]
+ * @returns {Promise<number>} deleted count
+ */
+export async function pruneExpiredSessions(userId, days = 7) {
+  if (!isMongoReady() || !userId) return 0;
+
+  const retention = normalizeRetentionDays(days);
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - retention * MS_PER_DAY);
+
+  try {
+    const result = await Session.deleteMany({
+      $and: [
+        userSessionFilter(userId),
+        {
+          $or: [
+            { expiresAt: { $lte: now } },
+            { expiresAt: null, updatedAt: { $lt: cutoff } },
+            { expiresAt: { $exists: false }, updatedAt: { $lt: cutoff } },
+          ],
+        },
+      ],
+    });
+    return result.deletedCount || 0;
+  } catch (err) {
+    console.warn('[memory] pruneExpiredSessions failed:', err.message);
+    return 0;
+  }
+}
+
+/**
+ * Recompute expiresAt for a user's chats after they change 7d/11d/15d,
+ * and delete anything already past the new window.
+ * @param {string} userId
+ * @param {number} days
+ * @returns {Promise<{ deleted: number, updated: number }>}
+ */
+export async function refreshSessionExpiries(userId, days) {
+  if (!isMongoReady() || !userId) return { deleted: 0, updated: 0 };
+
+  const retention = normalizeRetentionDays(days);
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - retention * MS_PER_DAY);
+
+  try {
+    const deleted = await Session.deleteMany({
+      $and: [userSessionFilter(userId), { updatedAt: { $lt: cutoff } }],
+    });
+
+    const docs = await Session.find(userSessionFilter(userId))
+      .select('_id updatedAt')
+      .lean();
+
+    if (!docs.length) {
+      return { deleted: deleted.deletedCount || 0, updated: 0 };
+    }
+
+    const ops = docs.map((d) => ({
+      updateOne: {
+        filter: { _id: d._id },
+        update: {
+          $set: { expiresAt: expiresAtFrom(d.updatedAt || now, retention) },
+        },
+      },
+    }));
+
+    const bulk = await Session.bulkWrite(ops, { ordered: false });
+    return {
+      deleted: deleted.deletedCount || 0,
+      updated: bulk.modifiedCount || 0,
+    };
+  } catch (err) {
+    console.warn('[memory] refreshSessionExpiries failed:', err.message);
+    return { deleted: 0, updated: 0 };
+  }
+}
+
+/**
+ * Orphan sweeper: delete expired chats for every user + backfill missing expiresAt.
+ * Runs on a timer so deletion does not depend on opening the sidebar.
+ * @returns {Promise<{ deleted: number, backfilled: number }>}
+ */
+export async function sweepAllExpiredSessions() {
+  if (!isMongoReady()) return { deleted: 0, backfilled: 0 };
+
+  const now = new Date();
+  let deleted = 0;
+  let backfilled = 0;
+
+  try {
+    const byExpiry = await Session.deleteMany({
+      expiresAt: { $type: 'date', $lte: now },
+    });
+    deleted += byExpiry.deletedCount || 0;
+
+    const users = await User.find({})
+      .select('_id settings.chatRetentionDays')
+      .lean();
+
+    for (const user of users) {
+      const retention = normalizeRetentionDays(user.settings?.chatRetentionDays);
+      const cutoff = new Date(now.getTime() - retention * MS_PER_DAY);
+      const uid = String(user._id);
+
+      const gone = await Session.deleteMany({
+        $and: [
+          userSessionFilter(uid),
+          {
+            $or: [
+              { expiresAt: { $type: 'date', $lte: now } },
+              { updatedAt: { $lt: cutoff } },
+            ],
+          },
+        ],
+      });
+      deleted += gone.deletedCount || 0;
+
+      const missing = await Session.find({
+        $and: [
+          userSessionFilter(uid),
+          {
+            $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }],
+          },
+        ],
+      })
+        .select('_id updatedAt')
+        .lean();
+
+      if (!missing.length) continue;
+
+      const ops = missing.map((d) => ({
+        updateOne: {
+          filter: { _id: d._id },
+          update: {
+            $set: { expiresAt: expiresAtFrom(d.updatedAt || now, retention) },
+          },
+        },
+      }));
+      const bulk = await Session.bulkWrite(ops, { ordered: false });
+      backfilled += bulk.modifiedCount || 0;
+    }
+
+    // Orphan sessions with no userId — default 7d
+    const orphanCutoff = new Date(now.getTime() - 7 * MS_PER_DAY);
+    const orphans = await Session.deleteMany({
+      $and: [
+        { $or: [{ userId: null }, { userId: { $exists: false } }] },
+        {
+          $or: [
+            { expiresAt: { $type: 'date', $lte: now } },
+            { updatedAt: { $lt: orphanCutoff } },
+          ],
+        },
+      ],
+    });
+    deleted += orphans.deletedCount || 0;
+
+    if (deleted || backfilled) {
+      console.log(
+        `[memory] sweep: deleted=${deleted} backfilledExpiresAt=${backfilled}`
+      );
+    }
+
+    return { deleted, backfilled };
+  } catch (err) {
+    console.warn('[memory] sweepAllExpiredSessions failed:', err.message);
+    return { deleted, backfilled };
   }
 }
 
