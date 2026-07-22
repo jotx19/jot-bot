@@ -14,12 +14,12 @@ const boxes = {
   xl: "size-14",
 } as const;
 
-/** Stylized mark — white glyph on black rounded-2xl. */
+/** Stylized mark — white glyph on black rounded square. */
 export function TinyjotLogo({ className, size = "md" }: TinyjotLogoProps) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 overflow-hidden rounded-xl",
+        "inline-flex shrink-0 overflow-hidden rounded-xl bg-black",
         boxes[size],
         className
       )}
