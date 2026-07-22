@@ -37,7 +37,6 @@ export const useAuthStore = create<AuthState>()(
       partialize: (s) => ({
         user: s.user,
         accessToken: s.accessToken,
-        googleClientId: s.googleClientId,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.accessToken) setAccessToken(state.accessToken);

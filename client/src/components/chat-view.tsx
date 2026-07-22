@@ -72,10 +72,22 @@ export function ChatView() {
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** Only hydrate from the server once per session — never overwrite live turns. */
+  const hydratedSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
     setActiveSessionId(sessionId);
   }, [sessionId, setActiveSessionId]);
+
+  useEffect(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    hydratedSessionRef.current = null;
+    setMessages([]);
+    setInput("");
+    setError(null);
+    setBusy(false);
+  }, [sessionId]);
 
   const { data: sessionData, isLoading } = useQuery({
     queryKey: ["session", sessionId],
@@ -92,16 +104,18 @@ export function ChatView() {
   });
 
   useEffect(() => {
-    if (!sessionData?.messages) return;
+    if (!sessionId || !sessionData?.messages) return;
+    if (hydratedSessionRef.current === sessionId) return;
+    hydratedSessionRef.current = sessionId;
     setMessages(
       sessionData.messages.map((m, i) => ({
-        id: `r-${i}`,
+        id: `r-${sessionId}-${i}`,
         role: m.role as "user" | "assistant",
         content: m.content,
         intent: m.intent || null,
       }))
     );
-  }, [sessionData]);
+  }, [sessionId, sessionData]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -130,27 +144,47 @@ export function ChatView() {
   );
   const empty = !messages.length && !isLoading;
 
-  const send = async () => {
-    const text = input.trim();
+  const findPrecedingUser = (assistantId: string) => {
+    const idx = messages.findIndex((m) => m.id === assistantId);
+    if (idx < 0) return null;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (messages[i].role === "user" && messages[i].content.trim()) {
+        return { userIdx: i, user: messages[i], assistantIdx: idx };
+      }
+    }
+    return null;
+  };
+
+  const runTurn = async (text: string, prior: UiMessage[]) => {
     if (!text || busy) return;
 
     setError(null);
-    setInput("");
     setBusy(true);
+    // Lock hydration so a late session fetch can't wipe this turn.
+    if (sessionId) hydratedSessionRef.current = sessionId;
 
-    const userMsg: UiMessage = {
-      id: `u-${Date.now()}`,
-      role: "user",
-      content: text,
-    };
+    const userMsg: UiMessage =
+      prior.length && prior[prior.length - 1].role === "user"
+        ? prior[prior.length - 1]
+        : {
+            id: `u-${Date.now()}`,
+            role: "user",
+            content: text,
+          };
+
+    const base =
+      prior.length && prior[prior.length - 1].role === "user"
+        ? prior
+        : [...prior, userMsg];
+
     const assistantId = `a-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      userMsg,
+    const nextMessages: UiMessage[] = [
+      ...base,
       { id: assistantId, role: "assistant", content: "", streaming: true },
-    ]);
+    ];
+    setMessages(nextMessages);
 
-    const history = [...messages, userMsg]
+    const history = base
       .filter((m) => m.content && !m.streaming)
       .map((m) => ({ role: m.role, content: m.content }));
 
@@ -173,8 +207,8 @@ export function ChatView() {
           );
         },
         onDone: (meta) => {
-          setMessages((prev) =>
-            prev.map((m) =>
+          setMessages((prev) => {
+            const updated = prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
@@ -184,10 +218,31 @@ export function ChatView() {
                     streaming: false,
                   }
                 : m
-            )
-          );
+            );
+            // Keep React Query in sync without a refetch race against persist.
+            qc.setQueryData(
+              ["session", sessionId],
+              (old: {
+                messages?: Array<{
+                  role: string;
+                  content: string;
+                  intent?: string | null;
+                }>;
+              } | undefined) =>
+                old
+                  ? {
+                      ...old,
+                      messages: updated.map((m) => ({
+                        role: m.role,
+                        content: m.content,
+                        intent: m.intent,
+                      })),
+                    }
+                  : old
+            );
+            return updated;
+          });
           qc.invalidateQueries({ queryKey: ["sessions"] });
-          qc.invalidateQueries({ queryKey: ["session", sessionId] });
         },
         onError: (err) => {
           setError(err);
@@ -207,6 +262,38 @@ export function ChatView() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput("");
+    await runTurn(text, messages);
+  };
+
+  const regenerate = (assistantId: string) => {
+    if (busy) return;
+    const hit = findPrecedingUser(assistantId);
+    if (!hit) return;
+    void runTurn(hit.user.content.trim(), messages.slice(0, hit.userIdx + 1));
+  };
+
+  const editPrompt = (messageId: string) => {
+    if (busy) return;
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+
+    const target = messages[idx];
+    if (target.role === "user") {
+      setInput(target.content);
+      setMessages(messages.slice(0, idx));
+      return;
+    }
+
+    const hit = findPrecedingUser(messageId);
+    if (!hit) return;
+    setInput(hit.user.content);
+    setMessages(messages.slice(0, hit.userIdx));
   };
 
   return (
@@ -339,7 +426,13 @@ export function ChatView() {
             />
           )}
           {messages.map((m) => (
-            <ChatMessage key={m.id} message={m} />
+            <ChatMessage
+              key={m.id}
+              message={m}
+              busy={busy}
+              onEdit={editPrompt}
+              onRegenerate={regenerate}
+            />
           ))}
           <div ref={bottomRef} />
         </div>

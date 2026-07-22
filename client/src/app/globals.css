@@ -106,3 +106,45 @@ body {
   box-sizing: border-box;
   border-color: var(--border);
 }
+
+/* ChatGPT-style shimmer wave on waiting text */
+@keyframes thinking-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.thinking-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--muted-foreground) 0%,
+    var(--muted-foreground) 35%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 65%,
+    var(--muted-foreground) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: thinking-shimmer 1.6s ease-in-out infinite;
+}
+
+/* Stretch official Google button over our matching login chrome */
+.google-btn-host {
+  opacity: 0.02;
+}
+.google-btn-host > div,
+.google-btn-host > div > div {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 2.5rem !important;
+}
+.google-btn-host iframe {
+  width: 100% !important;
+  min-height: 2.5rem !important;
+}

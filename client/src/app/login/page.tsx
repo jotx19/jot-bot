@@ -69,16 +69,43 @@ export default function LoginPage() {
 
   useEffect(() => setMounted(true), []);
 
+  // Prefer server value; fall back to public env (needed when /api/auth/me is blocked).
+  useEffect(() => {
+    const fromEnv = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
+    if (fromEnv && !googleClientId) setGoogleClientId(fromEnv);
+  }, [googleClientId, setGoogleClientId]);
+
+  // GIS script onLoad is unreliable in production (cache / CSP). Poll instead.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.google?.accounts?.id) {
+      setGisReady(true);
+      return;
+    }
+    const id = window.setInterval(() => {
+      if (window.google?.accounts?.id) {
+        setGisReady(true);
+        window.clearInterval(id);
+      }
+    }, 200);
+    const timeout = window.setTimeout(() => window.clearInterval(id), 15_000);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
         const { data } = await api.get("/api/auth/me");
+        // Always trust the API client id in production (overrides stale localStorage / env).
         if (data.googleClientId) setGoogleClientId(data.googleClientId);
         if (data.authenticated && data.user) {
           router.replace("/chat");
         }
       } catch {
-        /* offline backend */
+        /* offline / CORS — keep NEXT_PUBLIC_GOOGLE_CLIENT_ID fallback */
       }
     })();
   }, [router, setGoogleClientId]);
@@ -86,58 +113,54 @@ export default function LoginPage() {
   useEffect(() => {
     if (!gisReady || !googleClientId || !mounted) return;
     const el = document.getElementById("google-btn");
-    if (!el || !window.google) return;
+    if (!el || !window.google?.accounts?.id) return;
 
-    window.google.accounts.id.initialize({
-      client_id: googleClientId,
-      callback: async (response: { credential: string }) => {
-        try {
-          setLoading(true);
-          const { data } = await api.post("/api/auth/google", {
-            idToken: response.credential,
-          });
-          setSession(data.user, data.accessToken);
-          toast.success("Signed in with Google");
-          router.replace("/chat");
-        } catch (err) {
-          toast.error(
-            err instanceof Error ? err.message : "Google login failed"
-          );
-        } finally {
-          setLoading(false);
-        }
-      },
-    });
+    const width = Math.max(
+      280,
+      Math.floor(el.parentElement?.getBoundingClientRect().width || el.getBoundingClientRect().width || 352)
+    );
 
-    el.innerHTML = "";
-    window.google.accounts.id.renderButton(el, {
-      theme: resolvedTheme === "light" ? "outline" : "filled_black",
-      size: "large",
-      shape: "pill",
-      width: 352,
-      text: "signin_with",
-      logo_alignment: "left",
-    });
+    try {
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async (response: { credential: string }) => {
+          try {
+            setLoading(true);
+            const { data } = await api.post("/api/auth/google", {
+              idToken: response.credential,
+            });
+            setSession(data.user, data.accessToken);
+            toast.success("Signed in with Google");
+            router.replace("/chat");
+          } catch (err) {
+            toast.error(
+              err instanceof Error ? err.message : "Google login failed"
+            );
+          } finally {
+            setLoading(false);
+          }
+        },
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        use_fedcm_for_prompt: true,
+      });
+
+      el.innerHTML = "";
+      window.google.accounts.id.renderButton(el, {
+        theme: resolvedTheme === "light" ? "outline" : "filled_black",
+        size: "large",
+        shape: "pill",
+        width,
+        text: "signin_with",
+        logo_alignment: "left",
+      });
+    } catch (err) {
+      console.error("[google-signin]", err);
+      toast.error(
+        "Google button failed to render. Confirm https://tinyjot.jotx.space is an Authorized JavaScript origin."
+      );
+    }
   }, [gisReady, googleClientId, router, setSession, resolvedTheme, mounted]);
-
-  const onGoogleClick = () => {
-    if (!googleClientId) {
-      toast.error("Google Sign-In is not configured yet");
-      return;
-    }
-    if (!gisReady || !window.google) {
-      toast.error("Google Sign-In is still loading");
-      return;
-    }
-    const iframeBtn = document
-      .getElementById("google-btn")
-      ?.querySelector("div[role=button]") as HTMLElement | null;
-    if (iframeBtn) {
-      iframeBtn.click();
-      return;
-    }
-    window.google.accounts.id.prompt();
-  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,6 +188,9 @@ export default function LoginPage() {
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
         onLoad={() => setGisReady(true)}
+        onError={() =>
+          toast.error("Failed to load Google Sign-In script")
+        }
       />
 
       <div
@@ -244,30 +270,42 @@ export default function LoginPage() {
                 ))}
               </div>
 
-              {/* Always-visible Sign in with Google */}
-              <div className="relative space-y-2">
-                <button
-                  type="button"
-                  onClick={onGoogleClick}
-                  disabled={loading}
+              {!googleClientId ? (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  Google Sign-In is not configured. Set{" "}
+                  <code className="font-mono">NEXT_PUBLIC_GOOGLE_CLIENT_ID</code>{" "}
+                  on the frontend and{" "}
+                  <code className="font-mono">GOOGLE_CLIENT_ID</code> on the API.
+                </p>
+              ) : (
+                <div
                   className={cn(
-                    "flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-border",
-                    "bg-white text-sm font-medium text-neutral-800",
-                    "transition-colors hover:bg-neutral-50",
-                    "dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800",
-                    "disabled:opacity-60"
+                    "relative h-10 w-full overflow-hidden rounded-full",
+                    loading && "pointer-events-none opacity-60"
                   )}
                 >
-                  <GoogleMark className="size-4" />
-                  Sign in with Google
-                </button>
-                {/* Hidden GIS host for the official button click target */}
-                <div
-                  id="google-btn"
-                  className="pointer-events-none absolute h-px w-[352px] overflow-hidden opacity-0"
-                  aria-hidden
-                />
-              </div>
+                  {/* Visual — matches username/password + Continue chrome */}
+                  <div
+                    aria-hidden
+                    className={cn(
+                      "pointer-events-none absolute inset-0 flex items-center justify-center gap-2.5",
+                      "rounded-full border border-border bg-background",
+                      "text-sm font-medium text-foreground"
+                    )}
+                  >
+                    <GoogleMark className="size-4" />
+                    {gisReady ? "Sign in with Google" : "Loading Google…"}
+                  </div>
+                  {/* Real GIS hit-target (kept interactive; opacity > 0 for production) */}
+                  <div
+                    id="google-btn"
+                    className={cn(
+                      "google-btn-host absolute inset-0 z-10",
+                      !gisReady && "pointer-events-none"
+                    )}
+                  />
+                </div>
+              )}
 
               <div className="relative text-center text-xs text-muted-foreground">
                 <span className="relative z-10 bg-[#F7F5F1] px-2 dark:bg-[#0c0c0c]">
