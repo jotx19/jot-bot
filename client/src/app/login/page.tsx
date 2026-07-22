@@ -274,7 +274,7 @@ export default function LoginPage() {
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                   Google Sign-In is not configured. Set{" "}
                   <code className="font-mono">NEXT_PUBLIC_GOOGLE_CLIENT_ID</code>{" "}
-                  on the frontend and{" "}
+                  on the client and{" "}
                   <code className="font-mono">GOOGLE_CLIENT_ID</code> on the API.
                 </p>
               ) : (
