@@ -1,8 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Forward } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -16,12 +16,26 @@ interface ChatMessageInputProps {
   disabled?: boolean;
 }
 
+/** Grow until this height, then scroll inside the field. */
+const MAX_HEIGHT_PX = 200;
+
 export function ChatMessageInput({
   value,
   onChange,
   onSend,
   disabled,
 }: ChatMessageInputProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const next = Math.min(el.scrollHeight, MAX_HEIGHT_PX);
+    el.style.height = `${Math.max(next, 40)}px`;
+    el.style.overflowY = el.scrollHeight > MAX_HEIGHT_PX ? "auto" : "hidden";
+  }, [value]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -30,17 +44,18 @@ export function ChatMessageInput({
   };
 
   return (
-    <div className="w-full border-t border-border p-3">
-      <div className="flex w-full items-start gap-2 rounded-xl border border-border bg-background/80 px-3 py-1 shadow-sm backdrop-blur-md">
+    <div className="w-full p-3 md:p-4">
+      <div className="flex w-full items-end gap-2 rounded-xl border border-border bg-background/70 px-3 py-1 shadow-sm backdrop-blur-md">
         <div className="flex-1">
-          <Textarea
+          <textarea
+            ref={textareaRef}
             value={value}
             placeholder="Sending message!"
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={disabled}
-            className="min-h-[40px] max-h-[120px] resize-none border-none bg-transparent font-mono tracking-tight shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 md:min-h-[52px]"
             rows={1}
+            className="min-h-[40px] max-h-[200px] w-full resize-none border-none bg-px-0 py-2 font-mono text-base tracking-tight text-foreground outline-none placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:min-h-[52px] md:text-sm [scrollbar-width:thin]"
           />
         </div>
 
@@ -48,7 +63,7 @@ export function ChatMessageInput({
           <TooltipTrigger asChild>
             <Button
               onClick={onSend}
-              className="mt-1 rounded-full bg-blue-500 text-white hover:bg-blue-600"
+              className="mb-1 rounded-full bg-blue-500 text-white hover:bg-blue-600"
               size="icon"
               disabled={disabled || !value.trim()}
               type="button"

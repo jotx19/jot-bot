@@ -422,7 +422,7 @@ export function ChatView() {
           {empty && (
             <EmptyChat
               title="No chat yet"
-              description="Send a message to start — or pick a session from the sidebar."
+              description="Send a message to start or pick a session from the sidebar."
             />
           )}
           {messages.map((m) => (
@@ -441,7 +441,7 @@ export function ChatView() {
           <div className="mb-2 px-1 text-sm text-red-400">{error}</div>
         )}
 
-        <div className="sticky bottom-0 z-40 backdrop-blur">
+        <div className="sticky bottom-0 z-40">
           <ChatMessageInput
             value={input}
             onChange={setInput}
