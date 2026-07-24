@@ -250,7 +250,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
       >
         <SidebarHeader className="gap-3">
           <div className="flex w-full gap-2 bg-black/50 rounded-md items-center justify-center px-3 md:mt-1">
-            <TinyjotLogo size="lg" /> <span className="text-sm text-foreground font-semibold">tinyjot</span>
+            <TinyjotLogo size="lg" className="bg-transparent" /> <span className="text-sm text-foreground font-semibold">tinyjot</span>
           </div>
 
           <div className="px-1.5 pt-1 md:mt-5 md:pt-0">
