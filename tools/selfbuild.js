@@ -10,6 +10,9 @@ import {
   removeFromDisk,
   materializeOnDisk,
   extractScriptNameFromInput,
+  suggestScriptNameFromInput,
+  ensureUniqueScriptName,
+  isScriptOverwriteRequest,
   removeLegacyToolFile,
 } from './sandbox/store.js';
 import { prepareSandboxCode } from './sandbox/sanitize.js';
@@ -77,6 +80,8 @@ export default {
     try {
       const inputStr = typeof input === 'string' ? input : JSON.stringify(input);
       const extractedName = extractScriptNameFromInput(inputStr);
+      const suggestedName = suggestScriptNameFromInput(inputStr);
+      const allowOverwrite = isScriptOverwriteRequest(inputStr);
 
       let payload = input;
       if (typeof input === 'string') {
@@ -84,7 +89,7 @@ export default {
           payload = JSON.parse(input);
         } catch {
           payload = {
-            name: extractedName || 'sandbox_script',
+            name: suggestedName,
             description: input,
             codeLogic: input,
           };
@@ -92,6 +97,9 @@ export default {
       }
 
       if (extractedName) payload.name = extractedName;
+      else if (!payload.name || payload.name === 'sandbox_script') {
+        payload.name = suggestedName;
+      }
 
       const { name, description, codeLogic } = payload;
       if (!name || !description || !codeLogic) {
@@ -112,7 +120,9 @@ export default {
 
       let built;
       if (sandboxMode) {
-        const safeName = (extractedName || name).replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+        const safeName = (extractedName || suggestedName || name)
+          .replace(/[^a-zA-Z0-9_]/g, '_')
+          .toLowerCase();
         const consoleOnly =
           /\bconsole\.log\s+only\b/i.test(inputStr) ||
           (!/\b(counter|persist|state|save between|increment|cache)\b/i.test(inputStr) &&
@@ -171,9 +181,14 @@ Task: ${input}
         built = await buildTool(name, description, codeLogic);
       }
 
-      const scriptName = sandboxMode
-        ? (extractedName || built.name).replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase()
+      let scriptName = sandboxMode
+        ? (extractedName || built.name || suggestedName)
+            .replace(/[^a-zA-Z0-9_]/g, '_')
+            .toLowerCase()
         : built.name;
+      if (sandboxMode && !allowOverwrite) {
+        scriptName = await ensureUniqueScriptName(scriptName);
+      }
       if (sandboxMode) {
         built.name = scriptName;
         removeLegacyToolFile(scriptName);

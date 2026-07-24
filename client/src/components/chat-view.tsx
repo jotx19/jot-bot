@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquareIcon } from "lucide-react";
+import { toast } from "sonner";
 import { api, type UiMessage } from "@/lib/api";
 import { streamChat } from "@/lib/stream-chat";
 import { useChatUiStore } from "@/stores/app-store";
@@ -69,7 +70,6 @@ export function ChatView() {
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   /** Only hydrate from the server once per session — never overwrite live turns. */
@@ -85,7 +85,6 @@ export function ChatView() {
     hydratedSessionRef.current = null;
     setMessages([]);
     setInput("");
-    setError(null);
     setBusy(false);
   }, [sessionId]);
 
@@ -158,7 +157,6 @@ export function ChatView() {
   const runTurn = async (text: string, prior: UiMessage[]) => {
     if (!text || busy) return;
 
-    setError(null);
     setBusy(true);
     // Lock hydration so a late session fetch can't wipe this turn.
     if (sessionId) hydratedSessionRef.current = sessionId;
@@ -245,18 +243,17 @@ export function ChatView() {
           qc.invalidateQueries({ queryKey: ["sessions"] });
         },
         onError: (err) => {
-          setError(err);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    content: m.content || `Error: ${err}`,
-                    streaming: false,
-                  }
-                : m
-            )
-          );
+          toast.error(err || "Internal server error.");
+          setMessages((prev) => {
+            const current = prev.find((m) => m.id === assistantId);
+            // Drop empty failed bubble; keep partial stream if any tokens arrived.
+            if (!current?.content?.trim()) {
+              return prev.filter((m) => m.id !== assistantId);
+            }
+            return prev.map((m) =>
+              m.id === assistantId ? { ...m, streaming: false } : m
+            );
+          });
         },
       });
     } finally {
@@ -436,10 +433,6 @@ export function ChatView() {
           ))}
           <div ref={bottomRef} />
         </div>
-
-        {error && (
-          <div className="mb-2 px-1 text-sm text-red-400">{error}</div>
-        )}
 
         <div className="sticky bottom-0 z-40">
           <ChatMessageInput

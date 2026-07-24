@@ -5,6 +5,7 @@ import {
   Partials,
 } from 'discord.js';
 import { runChatTurn } from '../core/runtime.js';
+import { PUBLIC_ERROR } from '../core/errors.js';
 import { storeExchange } from '../core/rag.js';
 import { loadSession, saveSession } from '../core/memory.js';
 import { getDiscordAllowlist } from '../core/users.js';
@@ -189,8 +190,8 @@ async function handleDiscordMessage(message, client) {
   );
 
   if (!turn.ok) {
-    await sendReply(message, 'ERROR', `Something went wrong: ${turn.error}`);
-    console.warn(`[discord] task ${turn.task?.id} FAILED: ${turn.error}`);
+    await sendReply(message, 'ERROR', PUBLIC_ERROR);
+    console.warn(`[discord] task ${turn.task?.id} FAILED`);
     return;
   }
 

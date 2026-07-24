@@ -31,6 +31,92 @@ export function extractScriptNameFromInput(inputStr) {
   return null;
 }
 
+const NAME_STOP_WORDS = new Set([
+  ...SKIP_NAMES,
+  'make',
+  'create',
+  'build',
+  'write',
+  'save',
+  'store',
+  'persist',
+  'run',
+  'execute',
+  'test',
+  'try',
+  'please',
+  'for',
+  'with',
+  'from',
+  'into',
+  'and',
+  'or',
+  'me',
+  'my',
+  'new',
+  'another',
+  'one',
+  'more',
+  'second',
+  'third',
+  'different',
+  'every',
+  'minute',
+  'hour',
+  'seconds',
+  'minutes',
+  'hours',
+]);
+
+/**
+ * Suggest a readable base name from the request when the user did not name the script.
+ */
+export function suggestScriptNameFromInput(inputStr) {
+  const extracted = extractScriptNameFromInput(inputStr);
+  if (extracted) return extracted;
+
+  const words = (String(inputStr).toLowerCase().match(/[a-z][a-z0-9]{2,}/g) || []).filter(
+    (w) => !NAME_STOP_WORDS.has(w)
+  );
+  const picked = words.slice(0, 3);
+  if (picked.length) return picked.join('_').slice(0, 40);
+  return 'sandbox_script';
+}
+
+/**
+ * Return `base` if unused, otherwise `base_2`, `base_3`, …
+ * so create requests never silently overwrite an existing script.
+ */
+export async function ensureUniqueScriptName(baseName) {
+  let name = String(baseName || 'sandbox_script')
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .toLowerCase();
+  if (!name) name = 'sandbox_script';
+
+  const taken = async (n) => {
+    if (fs.existsSync(scriptPathFor(n))) return true;
+    if (!isMongoReady()) return false;
+    return Boolean(await SandboxScript.exists({ name: n }));
+  };
+
+  if (!(await taken(name))) return name;
+
+  for (let i = 2; i <= 100; i++) {
+    const candidate = `${name}_${i}`;
+    if (!(await taken(candidate))) return candidate;
+  }
+  return `${name}_${Date.now()}`;
+}
+
+/** True when the user asked to edit an existing script (overwrite allowed). */
+export function isScriptOverwriteRequest(inputStr) {
+  const m = String(inputStr || '').toLowerCase();
+  if (/\b(another|a new|new script|different|second|third|one more)\b/.test(m)) {
+    return false;
+  }
+  return /\b(update|modify|change|fix|overwrite|replace|edit)\b/.test(m);
+}
+
 export function removeLegacyToolFile(name) {
   const fp = path.join(TOOLS_DIR, `${name}.generated.js`);
   if (fs.existsSync(fp)) {

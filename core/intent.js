@@ -4,6 +4,7 @@ import { retrieveContext, formatContextBlock } from './rag.js';
 import { getMemoryContext, learnFromMessage } from './memory.js';
 import { getBotName } from './persona.js';
 import { listTools, executeTool } from '../tools/registry.js';
+import { logAndPublicError, PUBLIC_ERROR } from './errors.js';
 import {
   cancel as cancelScheduled,
   formatScheduledReply,
@@ -434,7 +435,7 @@ async function handleTask(message, history, options = {}) {
     const { tool, input } = await pickTool(message);
     return runToolAndReply(message, history, options, tool, input);
   } catch (err) {
-    const reply = `Task failed: ${err.message}`;
+    const reply = logAndPublicError(err, 'intent/task');
     if (options.onToken) options.onToken(reply);
     return { intent: 'TASK', reply, toolUsed: null };
   }
@@ -451,7 +452,7 @@ async function handleSearch(message, history, options = {}) {
     const reply = result.answer || result.summary || 'No search results found.';
     return { intent: 'SEARCH', reply, toolUsed: 'websearch' };
   } catch (err) {
-    const reply = `Search failed: ${err.message}`;
+    const reply = logAndPublicError(err, 'intent/search');
     if (options.onToken) options.onToken(reply);
     return { intent: 'SEARCH', reply, toolUsed: 'websearch' };
   }
@@ -468,7 +469,7 @@ async function handleRecruiterEmail(message, history, options = {}) {
     const reply = result.answer || 'No recruiter emails found.';
     return { intent: 'SEARCH', reply, toolUsed: 'recruiter', toolResult: result };
   } catch (err) {
-    const reply = `Recruiter lookup failed: ${err.message}`;
+    const reply = logAndPublicError(err, 'intent/recruiter');
     if (options.onToken) options.onToken(reply);
     return { intent: 'SEARCH', reply, toolUsed: 'recruiter' };
   }
@@ -483,8 +484,10 @@ async function handleRecruiterEmail(message, history, options = {}) {
  */
 export async function routeMessage(message, history = [], options = {}) {
   if (!getLlmApiKey()) {
-    const reply =
-      'OpenRouter is not configured. Add your API key in Settings → BYOK, or set OPENROUTER_API_KEY on the server.';
+    console.error(
+      '[intent] OpenRouter is not configured. Add API key in Settings → BYOK, or set OPENROUTER_API_KEY on the server.'
+    );
+    const reply = PUBLIC_ERROR;
     if (options.onToken) options.onToken(reply);
     return { intent: 'CHAT', reply, toolUsed: null };
   }

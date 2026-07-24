@@ -96,7 +96,7 @@ export function taskAddChild(task, childId) {
   task.updatedAt = nowIso();
 }
 
-/** Safe JSON for API / logs (no large payloads). */
+/** Safe JSON for API / logs (no large payloads; no provider/billing error details). */
 export function taskToPublicJSON(task) {
   if (!task) return null;
   return {
@@ -106,7 +106,10 @@ export function taskToPublicJSON(task) {
     updatedAt: task.updatedAt,
     retries: task.retries,
     toolCalls: task.toolCalls,
-    failures: task.failures,
+    failures: (task.failures || []).map((f) => ({
+      at: f.at,
+      message: 'Internal server error.',
+    })),
     parentTaskId: task.parentTaskId,
     childTaskIds: task.childTaskIds,
     channel: task.channel,

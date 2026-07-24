@@ -7,6 +7,7 @@ import {
   taskRecordFailure,
   taskToPublicJSON,
 } from './state.js';
+import { logAndPublicError, PUBLIC_ERROR } from './errors.js';
 
 /**
  * Execute one user message through intent routing with explicit task lifecycle.
@@ -63,14 +64,16 @@ export async function runChatTurn(params) {
       result,
     };
   } catch (err) {
-    const turnError = err?.message || 'Unknown error';
     taskRecordFailure(task, err);
     taskSetStatus(task, TASK_STATUS.FAILED);
-    console.warn(`[runtime] task=${task.id} status=${task.status} channel=${task.channel} — ${turnError}`);
+    const publicError = logAndPublicError(err, `runtime/task=${task.id}`);
+    console.warn(
+      `[runtime] task=${task.id} status=${task.status} channel=${task.channel} — failed`
+    );
     return {
       ok: false,
       task: taskToPublicJSON(task),
-      error: turnError,
+      error: publicError || PUBLIC_ERROR,
     };
   }
 }

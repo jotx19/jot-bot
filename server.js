@@ -21,6 +21,7 @@ import { listScripts, deleteScript, getScript } from './tools/sandbox/store.js';
 import { runChatTurn } from './core/runtime.js';
 import { normalizeDiscordId, getDiscordInviteUrl } from './core/users.js';
 import { runWithLlmCredentials, credsFromUserDoc } from './core/llm-context.js';
+import { PUBLIC_ERROR, logAndPublicError } from './core/errors.js';
 import {
   isAuthEnabled,
   isUserAuthEnabled,
@@ -627,7 +628,7 @@ app.post('/api/chat', async (req, res) => {
           res.write(
             `data: ${JSON.stringify({
               type: 'error',
-              error: turn.error,
+              error: PUBLIC_ERROR,
               task: turn.task,
             })}\n\n`
           );
@@ -660,7 +661,7 @@ app.post('/api/chat', async (req, res) => {
 
       if (!turn.ok) {
         return res.status(500).json({
-          error: turn.error,
+          error: PUBLIC_ERROR,
           task: turn.task,
         });
       }
@@ -676,12 +677,12 @@ app.post('/api/chat', async (req, res) => {
       });
     });
   } catch (err) {
-    console.error('[api/chat]', err.message);
+    logAndPublicError(err, 'api/chat');
     if (res.headersSent) {
-      res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: PUBLIC_ERROR })}\n\n`);
       return res.end();
     }
-    return res.status(500).json({ error: err.message || 'Internal server error' });
+    return res.status(500).json({ error: PUBLIC_ERROR });
   }
 });
 
