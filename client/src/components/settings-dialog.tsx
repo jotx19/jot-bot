@@ -190,10 +190,12 @@ export function SettingsDialog() {
         showCloseButton={false}
         className={cn(
           "gap-0 overflow-hidden border-border bg-[#1a1a1a] p-0 text-foreground shadow-2xl",
-          "fixed inset-x-0 bottom-0 top-auto flex h-[min(92dvh,720px)] w-full max-w-none translate-x-0 translate-y-0 rounded-t-2xl rounded-b-none",
+          // Mobile: column sheet so tabs sit above scrollable fields
+          "fixed inset-x-0 bottom-0 top-auto flex !flex-col h-[min(92dvh,720px)] max-h-[92dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-t-2xl rounded-b-none",
           "data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-4",
-          "sm:inset-auto sm:top-[50%] sm:left-[50%] sm:h-[min(640px,85vh)] sm:w-full sm:max-w-[860px] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl",
-          "sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95 sm:flex-row"
+          // Desktop: side nav + panel
+          "sm:inset-auto sm:top-[50%] sm:left-[50%] sm:h-[min(640px,85vh)] sm:max-h-[85vh] sm:w-full sm:max-w-[860px] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl sm:!flex-row",
+          "sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95"
         )}
       >
         <DialogTitle className="sr-only">Settings</DialogTitle>
@@ -202,7 +204,7 @@ export function SettingsDialog() {
         </DialogDescription>
 
         {/* Mobile top bar + horizontal tabs */}
-        <div className="flex shrink-0 flex-col border-b border-white/10 sm:hidden">
+        <div className="flex w-full shrink-0 flex-col border-b border-white/10 sm:hidden">
           <div className="flex items-center justify-between px-4 py-3">
             <p className="text-sm font-semibold">Settings</p>
             <Tooltip>
@@ -219,7 +221,7 @@ export function SettingsDialog() {
               <TooltipContent>Close</TooltipContent>
             </Tooltip>
           </div>
-          <div className="flex gap-1 overflow-x-auto px-3 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-1 overflow-x-auto overscroll-x-contain px-3 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {tabs.map((t) => (
               <TabButton
                 key={t.id}
@@ -262,7 +264,7 @@ export function SettingsDialog() {
           </nav>
         </aside>
 
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -277,7 +279,7 @@ export function SettingsDialog() {
             <TooltipContent>Close</TooltipContent>
           </Tooltip>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 sm:pr-12">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-8 sm:p-6 sm:pr-12 sm:pb-6">
             {isLoading ? (
               <div className="space-y-5">
                 <div className="space-y-2">
