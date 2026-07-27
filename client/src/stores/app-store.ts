@@ -46,12 +46,22 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
+export type SettingsTab =
+  | "general"
+  | "account"
+  | "discord"
+  | "byok"
+  | "mcp"
+  | "appearance";
+
 type ChatUiState = {
   sidebarOpen: boolean;
   settingsOpen: boolean;
+  settingsTab: SettingsTab;
   activeSessionId: string | null;
   setSidebarOpen: (v: boolean) => void;
   setSettingsOpen: (v: boolean) => void;
+  openSettings: (tab?: SettingsTab) => void;
   toggleSidebar: () => void;
   setActiveSessionId: (id: string | null) => void;
 };
@@ -59,9 +69,16 @@ type ChatUiState = {
 export const useChatUiStore = create<ChatUiState>((set) => ({
   sidebarOpen: true,
   settingsOpen: false,
+  settingsTab: "general",
   activeSessionId: null,
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setSettingsOpen: (settingsOpen) =>
+    set((s) => ({
+      settingsOpen,
+      settingsTab: settingsOpen ? s.settingsTab : "general",
+    })),
+  openSettings: (tab = "general") =>
+    set({ settingsOpen: true, settingsTab: tab }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
 }));

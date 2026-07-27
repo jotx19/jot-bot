@@ -8,6 +8,7 @@ import {
   RefreshCwIcon,
 } from "lucide-react";
 import type { UiMessage } from "@/lib/api";
+import { formatMessageMeta } from "@/lib/tool-label";
 import { cn } from "@/lib/utils";
 import { ChatMarkdown } from "@/components/chat/markdown";
 import { SolvingIndicator } from "@/components/chat/solving-indicator";
@@ -76,7 +77,7 @@ export function ChatMessage({
   const body = message.content?.trim() || "";
   const meta =
     !isUser && !message.streaming
-      ? [message.intent, message.toolUsed].filter(Boolean).join(" · ")
+      ? formatMessageMeta(message.intent, message.toolUsed)
       : "";
 
   useEffect(() => {

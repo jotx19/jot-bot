@@ -23,6 +23,13 @@ import { normalizeDiscordId, getDiscordInviteUrl } from './core/users.js';
 import { runWithLlmCredentials, credsFromUserDoc } from './core/llm-context.js';
 import { PUBLIC_ERROR, logAndPublicError } from './core/errors.js';
 import {
+  mergeMcpServers,
+  stripEmptySecrets,
+  testMcpServer,
+  MCP_MAX_SERVERS,
+  mcpConfigsFromUserDoc,
+} from './core/mcp.js';
+import {
   isAuthEnabled,
   isUserAuthEnabled,
   isLegacyPasswordAuth,
@@ -263,6 +270,7 @@ app.get('/api/settings', async (req, res) => {
           'Developer Mode → right-click the channel → Copy Channel ID. Bot needs Send Messages there.',
         botToken: 'DISCORD_BOT_TOKEN stays in server .env / Render (one bot per deploy).',
         byok: 'Your OpenRouter key is stored for your account only. Leave blank to use the server fallback key if configured.',
+        mcp: `Add up to ${MCP_MAX_SERVERS} MCP servers (HTTP URL or local stdio). Tools appear in chat automatically when enabled.`,
       },
     });
   } catch (err) {
@@ -321,6 +329,14 @@ app.put('/api/settings', async (req, res) => {
         .slice(0, 256);
     }
 
+    if (body.mcpServers !== undefined) {
+      const existing = await User.findById(req.auth.userId).select('settings.mcpServers').lean();
+      $set['settings.mcpServers'] = mergeMcpServers(
+        existing?.settings?.mcpServers,
+        body.mcpServers
+      ).slice(0, MCP_MAX_SERVERS);
+    }
+
     const doc = await User.findByIdAndUpdate(
       req.auth.userId,
       { $set },
@@ -349,6 +365,48 @@ app.put('/api/settings', async (req, res) => {
     return res.json({ ok: true, user: publicUser(doc) });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Probe an MCP server config (or a saved server by id) and list its tools.
+ */
+app.post('/api/mcp/test', async (req, res) => {
+  try {
+    if (!req.auth?.userId) {
+      return res.status(400).json({
+        error: 'MCP test requires a registered account',
+        code: 'USER_REQUIRED',
+      });
+    }
+
+    const body = req.body || {};
+    let cfg = body.server;
+
+    if (body.id || cfg?.id) {
+      const user = await User.findById(req.auth.userId).select('settings.mcpServers').lean();
+      const existingList = user?.settings?.mcpServers || [];
+      const id = body.id || cfg?.id;
+      const existing = existingList.find((s) => s.id === id);
+      if (cfg && existing) {
+        cfg = mergeMcpServers([existing], [stripEmptySecrets({ ...cfg, id })])[0];
+      } else if (!cfg && existing) {
+        cfg = existing;
+      }
+    }
+
+    if (!cfg) {
+      return res.status(400).json({ error: 'Provide server config or id' });
+    }
+
+    const result = await testMcpServer(cfg);
+    return res.json(result);
+  } catch (err) {
+    console.error('[mcp/test]', err.message);
+    return res.status(400).json({
+      ok: false,
+      error: String(err.message || 'Connection failed').slice(0, 300),
+    });
   }
 });
 
@@ -589,7 +647,8 @@ app.post('/api/session/:sessionId/clear', handleClearSession);
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, history = [], sessionId: rawSessionId, stream: wantStream } = req.body;
+    const { message, history = [], sessionId: rawSessionId, stream: wantStream, preferTool } =
+      req.body;
     const userId = req.auth?.userId || null;
     const sessionId = scopeSessionId(rawSessionId, userId);
 
@@ -599,7 +658,11 @@ app.post('/api/chat', async (req, res) => {
 
     const chatHistory = await resolveHistory(sessionId, history);
     const userDoc = userId ? await User.findById(userId).lean() : null;
-    const llmCreds = credsFromUserDoc(userDoc);
+    const llmCreds = {
+      ...credsFromUserDoc(userDoc),
+      userId,
+      mcpServers: mcpConfigsFromUserDoc(userDoc),
+    };
 
     const useSSE =
       wantStream === true ||
@@ -618,6 +681,7 @@ app.post('/api/chat', async (req, res) => {
           history: chatHistory,
           sessionId,
           channel: 'web',
+          preferTool,
           onToken: (chunk) => {
             fullReply += chunk;
             res.write(`data: ${JSON.stringify({ type: 'token', content: chunk })}\n\n`);
@@ -657,6 +721,7 @@ app.post('/api/chat', async (req, res) => {
         history: chatHistory,
         sessionId,
         channel: 'web',
+        preferTool,
       });
 
       if (!turn.ok) {

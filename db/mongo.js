@@ -80,6 +80,31 @@ const userSchema = new mongoose.Schema({
     openrouterModel: { type: String, default: '', trim: true },
     /** Keep chats for N days (7 | 11 | 15), then auto-delete. */
     chatRetentionDays: { type: Number, default: 7, enum: [7, 11, 15] },
+    /**
+     * User-configured MCP servers (stdio / HTTP / SSE).
+     * Secrets live in env/headers — never return raw values via publicUser.
+     */
+    mcpServers: {
+      type: [
+        {
+          id: { type: String, required: true },
+          name: { type: String, default: '' },
+          enabled: { type: Boolean, default: true },
+          transport: {
+            type: String,
+            enum: ['stdio', 'http', 'sse'],
+            default: 'http',
+          },
+          command: { type: String, default: '' },
+          args: { type: [String], default: [] },
+          env: { type: Object, default: {} },
+          cwd: { type: String, default: '' },
+          url: { type: String, default: '' },
+          headers: { type: Object, default: {} },
+        },
+      ],
+      default: [],
+    },
   },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },

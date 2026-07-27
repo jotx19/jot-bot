@@ -8,6 +8,7 @@ export async function streamChat(opts: {
   message: string;
   sessionId: string;
   history: Array<{ role: string; content: string }>;
+  preferTool?: string | null;
   signal?: AbortSignal;
   onToken: (chunk: string) => void;
   onDone: (meta: {
@@ -34,6 +35,7 @@ export async function streamChat(opts: {
       message: opts.message,
       sessionId: opts.sessionId,
       history: opts.history,
+      preferTool: opts.preferTool || undefined,
       stream: true,
     }),
   });

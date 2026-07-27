@@ -154,7 +154,11 @@ export function ChatView() {
     return null;
   };
 
-  const runTurn = async (text: string, prior: UiMessage[]) => {
+  const runTurn = async (
+    text: string,
+    prior: UiMessage[],
+    preferTool: string | null = null
+  ) => {
     if (!text || busy) return;
 
     setBusy(true);
@@ -167,7 +171,7 @@ export function ChatView() {
         : {
             id: `u-${Date.now()}`,
             role: "user",
-            content: text,
+            content: preferTool ? `/${preferTool} ${text}` : text,
           };
 
     const base =
@@ -194,6 +198,7 @@ export function ChatView() {
         message: text,
         sessionId,
         history,
+        preferTool,
         signal: abortRef.current.signal,
         onToken: (chunk) => {
           setMessages((prev) =>
@@ -262,10 +267,20 @@ export function ChatView() {
   };
 
   const send = async () => {
-    const text = input.trim();
-    if (!text || busy) return;
+    const raw = input.trim();
+    if (!raw || busy) return;
+    const slash = raw.match(/^\/(websearch|notion|sandbox|web|search)\b[\s:,-]*/i);
+    let preferTool: string | null = null;
+    let text = raw;
+    if (slash) {
+      const key = slash[1].toLowerCase();
+      preferTool =
+        key === "web" || key === "search" ? "websearch" : key;
+      text = raw.slice(slash[0].length).trim();
+      if (!text) return;
+    }
     setInput("");
-    await runTurn(text, messages);
+    await runTurn(text, messages, preferTool);
   };
 
   const regenerate = (assistantId: string) => {

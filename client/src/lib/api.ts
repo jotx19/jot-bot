@@ -52,6 +52,21 @@ api.interceptors.response.use(
   }
 );
 
+export type McpServerPublic = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  transport: "stdio" | "http" | "sse";
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  url?: string;
+  envKeys?: string[];
+  headerKeys?: string[];
+  hasEnv?: boolean;
+  hasHeaders?: boolean;
+};
+
 export type PublicUser = {
   id: string;
   username: string;
@@ -69,6 +84,7 @@ export type PublicUser = {
     openrouterApiKeySet?: boolean;
     openrouterApiKeyHint?: string;
     chatRetentionDays?: 7 | 11 | 15;
+    mcpServers?: McpServerPublic[];
   };
 };
 

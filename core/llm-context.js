@@ -1,10 +1,15 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
 /**
- * Request-scoped LLM / identity settings.
+ * Request-scoped LLM / identity / MCP settings.
  * Falls back to process.env when unset.
  */
 const llmContext = new AsyncLocalStorage();
+
+/** @returns {object|undefined} */
+export function getLlmContextStore() {
+  return llmContext.getStore();
+}
 
 /**
  * @param {{
@@ -14,6 +19,8 @@ const llmContext = new AsyncLocalStorage();
  *   botPersona?: string|null,
  *   userName?: string|null,
  *   fromUser?: boolean,
+ *   mcpServers?: Array<object>,
+ *   userId?: string|null,
  * }} creds
  * @param {() => Promise<T>} fn
  * @returns {Promise<T>}
@@ -30,6 +37,9 @@ export function runWithLlmCredentials(creds, fn) {
           : String(creds.botPersona).trim(),
       userName: creds?.userName?.trim() || null,
       fromUser: Boolean(creds?.fromUser),
+      mcpServers: Array.isArray(creds?.mcpServers) ? creds.mcpServers : [],
+      userId: creds?.userId ? String(creds.userId) : null,
+      mcpSession: null,
     },
     fn
   );
@@ -93,6 +103,7 @@ export function credsFromUserDoc(userDoc) {
     botPersona: settings.botPersona ?? '',
     userName,
     fromUser: Boolean(userDoc),
+    mcpServers: Array.isArray(settings.mcpServers) ? settings.mcpServers : [],
   };
 }
 

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { User, isMongoReady } from '../db/mongo.js';
+import { publicMcpServers } from './mcp.js';
 
 export const SESSION_COOKIE = 'tinyjot_session';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -288,6 +289,7 @@ export function publicUser(doc) {
       chatRetentionDays: [7, 11, 15].includes(Number(doc.settings?.chatRetentionDays))
         ? Number(doc.settings.chatRetentionDays)
         : 7,
+      mcpServers: publicMcpServers(doc.settings?.mcpServers),
     },
   };
 }

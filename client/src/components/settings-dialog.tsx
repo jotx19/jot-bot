@@ -7,6 +7,7 @@ import {
   KeyRound,
   Monitor,
   Moon,
+  Plug,
   Settings2,
   Sun,
   UserRound,
@@ -15,7 +16,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DiscordIcon } from "@hugeicons/core-free-icons";
 import { api } from "@/lib/api";
-import { useAuthStore, useChatUiStore } from "@/stores/app-store";
+import { useAuthStore, useChatUiStore, type SettingsTab } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,11 +37,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { McpIntegrationsPanel } from "@/components/mcp/mcp-integrations-panel";
 
-type SettingsTab = "general" | "account" | "discord" | "byok" | "appearance";
+type SettingsTabId = SettingsTab;
 
 const tabs: {
-  id: SettingsTab;
+  id: SettingsTabId;
   label: string;
   group: string;
   icon: React.ReactNode;
@@ -70,6 +73,12 @@ const tabs: {
     icon: <KeyRound className="size-4" />,
   },
   {
+    id: "mcp",
+    label: "MCP",
+    group: "Settings",
+    icon: <Plug className="size-4" />,
+  },
+  {
     id: "appearance",
     label: "Appearance",
     group: "Customize",
@@ -90,12 +99,14 @@ function TabButton({
   icon,
   label,
   className,
+  trailingBadge,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
   className?: string;
+  trailingBadge?: React.ReactNode;
 }) {
   return (
     <button
@@ -111,6 +122,7 @@ function TabButton({
     >
       <span className="opacity-80">{icon}</span>
       <span className="whitespace-nowrap">{label}</span>
+      {trailingBadge}
     </button>
   );
 }
@@ -118,8 +130,9 @@ function TabButton({
 export function SettingsDialog() {
   const open = useChatUiStore((s) => s.settingsOpen);
   const setSettingsOpen = useChatUiStore((s) => s.setSettingsOpen);
+  const settingsTab = useChatUiStore((s) => s.settingsTab);
   const user = useAuthStore((s) => s.user);
-  const [tab, setTab] = useState<SettingsTab>("general");
+  const [tab, setTab] = useState<SettingsTabId>("general");
   const qc = useQueryClient();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -146,6 +159,10 @@ export function SettingsDialog() {
   const [chatRetentionDays, setChatRetentionDays] = useState<7 | 11 | 15>(7);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (open) setTab(settingsTab);
+  }, [open, settingsTab]);
 
   useEffect(() => {
     const s = data?.user?.settings;
@@ -183,6 +200,11 @@ export function SettingsDialog() {
 
   const displayName = user?.displayName || user?.username || "you";
   const groups = ["Settings", "Customize"] as const;
+  const mcpTabBadge = (
+    <Badge variant="beta" className="uppercase tracking-wider">
+      beta
+    </Badge>
+  );
 
   return (
     <Dialog open={open} onOpenChange={setSettingsOpen}>
@@ -229,6 +251,7 @@ export function SettingsDialog() {
                 onClick={() => setTab(t.id)}
                 icon={t.icon}
                 label={t.label}
+                trailingBadge={t.id === "mcp" ? mcpTabBadge : undefined}
               />
             ))}
           </div>
@@ -257,6 +280,7 @@ export function SettingsDialog() {
                       icon={t.icon}
                       label={t.label}
                       className="w-full"
+                      trailingBadge={t.id === "mcp" ? mcpTabBadge : undefined}
                     />
                   ))}
               </div>
@@ -653,6 +677,11 @@ export function SettingsDialog() {
                   )}
                 </div>
               </div>
+            ) : tab === "mcp" ? (
+              <McpIntegrationsPanel
+                variant="settings"
+                hint={data?.hints?.mcp}
+              />
             ) : (
               <div className="space-y-6">
                 <div>

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LogOutIcon,
+  PlugIcon,
   SettingsIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import {
 import { api, type ChatSessionSummary } from "@/lib/api";
 import { useAuthStore, useChatUiStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -120,11 +122,19 @@ const navItems = [
     href: "/automation",
     label: "Automation",
     icon: WorkflowSquare01Icon,
+    lucide: false,
   },
   {
     href: "/scheduled",
     label: "Scheduled",
     icon: CalendarClockIcon,
+    lucide: false,
+  },
+  {
+    href: "/integrations",
+    label: "Integrations",
+    icon: PlugIcon,
+    lucide: true,
   },
 ] as const;
 
@@ -294,9 +304,18 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
                     isActive={active}
                     className="h-10 gap-2 rounded-xl px-2.5 text-sm font-semibold"
                   >
-                    <Link href={item.href}>
-                      <HugeiconsIcon icon={item.icon} size={20} />
-                      <span>{item.label}</span>
+                    <Link href={item.href} className="flex w-full items-center gap-2">
+                      {item.lucide ? (
+                        <item.icon className="size-5 shrink-0" />
+                      ) : (
+                        <HugeiconsIcon icon={item.icon} size={20} />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      {item.href === "/integrations" ? (
+                        <Badge variant="beta" className="shrink-0 uppercase tracking-wider">
+                          beta
+                        </Badge>
+                      ) : null}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

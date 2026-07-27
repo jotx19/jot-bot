@@ -10,6 +10,7 @@ import { storeExchange } from '../core/rag.js';
 import { loadSession, saveSession } from '../core/memory.js';
 import { getDiscordAllowlist } from '../core/users.js';
 import { runWithLlmCredentials, credsFromUserDoc } from '../core/llm-context.js';
+import { mcpConfigsFromUserDoc } from '../core/mcp.js';
 import { User, isMongoReady } from '../db/mongo.js';
 
 const INTENT_BADGES = {
@@ -171,7 +172,11 @@ async function handleDiscordMessage(message, client) {
         'settings.discordUserId': String(message.author.id),
       }).lean();
       if (linked) {
-        llmCreds = credsFromUserDoc(linked);
+        llmCreds = {
+          ...credsFromUserDoc(linked),
+          userId: String(linked._id),
+          mcpServers: mcpConfigsFromUserDoc(linked),
+        };
       }
     } catch {
       /* use env fallback */

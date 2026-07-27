@@ -8,6 +8,7 @@ import {
   taskToPublicJSON,
 } from './state.js';
 import { logAndPublicError, PUBLIC_ERROR } from './errors.js';
+import { closeMcpSessionForRequest } from './mcp.js';
 
 /**
  * Execute one user message through intent routing with explicit task lifecycle.
@@ -20,8 +21,8 @@ import { logAndPublicError, PUBLIC_ERROR } from './errors.js';
  *   channel?: string,
  *   parentTaskId?: string | null,
  *   onToken?: (chunk: string) => void,
+ *   preferTool?: string | null,
  * }} params
- * @returns {Promise<{ ok: true, task: object, result: object } | { ok: false, task: object, error: string }>}
  */
 export async function runChatTurn(params) {
   const {
@@ -31,6 +32,7 @@ export async function runChatTurn(params) {
     channel = 'web',
     parentTaskId = null,
     onToken,
+    preferTool = null,
   } = params;
 
   const task = createTaskRecord({
@@ -48,6 +50,7 @@ export async function runChatTurn(params) {
       sessionId,
       onToken,
       task,
+      preferTool,
     });
 
     if (result?.toolUsed) {
@@ -75,5 +78,9 @@ export async function runChatTurn(params) {
       task: taskToPublicJSON(task),
       error: publicError || PUBLIC_ERROR,
     };
+  } finally {
+    await closeMcpSessionForRequest().catch((err) => {
+      console.warn('[mcp] session close:', err.message);
+    });
   }
 }

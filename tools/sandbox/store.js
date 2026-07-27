@@ -316,6 +316,7 @@ export function isScriptListRequest(message) {
 
 export function isScriptDeleteRequest(message) {
   const m = message.toLowerCase();
+  if (/\bnotion\b/.test(m) || /\b(mcp|page|database|inbox|gmail)\b/.test(m)) return false;
   if (!/\b(delete|remove)\b/.test(m)) return false;
   return /\bscript\b/.test(m) || /\b(this|it|that)\b/.test(m) || /\b(delete|remove)\s+[a-z][a-z0-9_]+\b/i.test(message);
 }

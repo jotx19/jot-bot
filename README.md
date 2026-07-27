@@ -11,7 +11,7 @@ No SaaS subscription: bring your own [OpenRouter](https://openrouter.ai) key (fr
 | **Chat** | Web UI + Discord (@mention / DM) |
 | **Memory** | Graph facts in MongoDB; optional Qdrant vector RAG |
 | **Search** | Live web / stocks / Wikipedia via Serper, Yahoo, DuckDuckGo |
-| **Tools** | Calculator, URL summarize, recruiter email lookup |
+| **Tools** | Calculator, URL summarize, recruiter email lookup, per-user MCP servers |
 | **Self-build** | LLM writes Node scripts, save to sandbox, run or schedule |
 | **Accounts** | Register / login; chats scoped per user |
 | **Settings UI** | Discord allowlist + notify channel — no `.env` edits for those |
