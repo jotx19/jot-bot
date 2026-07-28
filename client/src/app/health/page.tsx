@@ -108,7 +108,7 @@ export default function HealthPage() {
           </Button>
         </div>
 
-        <div className="w-full md:h-[78vh] md:max-h-[720px] md:min-h-[480px]">
+        <div className="w-full pb-6 md:h-[78vh] md:max-h-[720px] md:min-h-[480px] md:overflow-hidden md:pb-0">
           {isLoading ? (
             <div className="grid h-full grid-cols-2 gap-3 md:grid-cols-12 md:grid-rows-2">
               <Skeleton className="col-span-2 rounded-[28px] md:col-span-7" />

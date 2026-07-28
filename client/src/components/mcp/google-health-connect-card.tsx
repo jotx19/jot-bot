@@ -113,26 +113,30 @@ export function GoogleHealthConnectCard({
           : "rounded-xl border border-white/10 bg-white/5 p-3"
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <GoogleHealthLogo size={28} className="rounded-lg" />
-            <div className="flex min-w-0 items-center gap-2">
-              <h3 className="text-sm font-semibold tracking-tight">
-                Google Health
-              </h3>
-              {connected ? (
-                <Badge variant="secondary" className="rounded-md text-[10px]">
-                  Connected
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="rounded-md text-[10px]">
-                  Not connected
-                </Badge>
-              )}
-            </div>
+            <h3 className="text-sm font-semibold tracking-tight">
+              Google Health
+            </h3>
+            {connected ? (
+              <Badge
+                variant="secondary"
+                className="shrink-0 rounded-md text-[10px]"
+              >
+                Connected
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="shrink-0 rounded-md text-[10px]"
+              >
+                Not connected
+              </Badge>
+            )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             Connect via Google OAuth to read Fitbit / Pixel Watch data (steps,
             sleep, heart rate). Then use{" "}
             <span className="font-mono text-[11px]">/health</span> in chat.
@@ -144,7 +148,8 @@ export function GoogleHealthConnectCard({
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
+
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:shrink-0">
           {connected ? (
             <>
               <Button
@@ -171,7 +176,7 @@ export function GoogleHealthConnectCard({
             <Button
               type="button"
               size="sm"
-              className="rounded-lg"
+              className="col-span-2 rounded-lg sm:col-span-2"
               disabled={!available || connecting}
               onClick={() => void connect()}
             >

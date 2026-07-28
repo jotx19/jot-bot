@@ -182,7 +182,7 @@ function smoothCurvePath(
   return d;
 }
 
-/** Goal-scaled day bars (full height at 10k+). */
+/** Goal-scaled day bars (full height at 10k+) — filled, tight premium track. */
 function StepsDayBars({
   points,
 }: {
@@ -196,13 +196,18 @@ function StepsDayBars({
           steps: 0,
         }));
 
-  const maxH = 72; // px — full when >= goal
+  const maxH = 58;
   const minH = 10;
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="w-full overflow-x-auto rounded-2xl bg-[#F0F0F0]/90 px-3 py-3 [-ms-overflow-style:none] [scrollbar-width:none] dark:bg-white/[0.06] sm:px-4 sm:py-3.5 [&::-webkit-scrollbar]:hidden">
-        <div className="flex min-w-min items-end justify-between gap-1.5 sm:gap-2.5">
+      <div className="flex h-[8.5rem] w-full flex-col rounded-2xl bg-[#F0F0F0]/90 px-2.5 py-2 dark:bg-white/[0.06] sm:px-3">
+        <div
+          className="grid min-h-0 flex-1 items-end gap-1 sm:gap-1.5"
+          style={{
+            gridTemplateColumns: `repeat(${Math.max(days.length, 1)}, minmax(0, 1fr))`,
+          }}
+        >
           {days.map((p, i) => {
             const steps = Math.max(0, Math.round(p.steps || 0));
             const ratio = Math.min(1, steps / GOALS.steps);
@@ -222,20 +227,20 @@ function StepsDayBars({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    className="flex w-5 shrink-0 cursor-default flex-col items-center gap-1.5 sm:w-6"
+                    className="flex h-full w-full min-w-0 cursor-default flex-col items-center justify-end gap-1.5"
                     aria-label={`${label}: ${fmtNum(steps)} steps`}
                   >
                     <span
                       className={cn(
-                        "w-4 rounded-[5px] transition-all sm:w-5",
+                        "w-full rounded-md transition-all sm:rounded-[7px]",
                         steps > 0 ? streakFill : streakMuted,
-                        hitGoal && "ring-1 ring-[#C9A227]/40"
+                        hitGoal && "ring-1 ring-[#C9A227]/50"
                       )}
                       style={{ height: barH }}
                     />
                     <span
                       className={cn(
-                        "text-[9px] font-medium leading-none",
+                        "text-[9px] font-medium leading-none tracking-wide sm:text-[10px]",
                         steps > 0
                           ? "text-[#C9A227] dark:text-[#A8860D]"
                           : "text-neutral-400 dark:text-white/35"
@@ -267,7 +272,7 @@ function HeartTimeChart({
     .map((p) => ({ ...p, bpm: Math.round(p.bpm) }));
   if (series.length < 2) {
     return (
-      <div className="mt-3 flex h-24 items-center text-xs text-muted-foreground">
+      <div className="flex h-[8.5rem] items-center justify-center rounded-2xl bg-[#F0F0F0]/90 text-xs text-muted-foreground dark:bg-white/[0.06]">
         No heart trend yet
       </div>
     );
@@ -282,11 +287,11 @@ function HeartTimeChart({
   const yTicks = [yMax, Math.round((yMin + yMax) / 2), yMin];
 
   const w = 280;
-  const h = 128;
-  const left = 30;
-  const right = 10;
-  const top = 16;
-  const bottom = 24;
+  const h = 118;
+  const left = 28;
+  const right = 8;
+  const top = 14;
+  const bottom = 20;
   const plotW = w - left - right;
   const plotH = h - top - bottom;
 
@@ -316,10 +321,10 @@ function HeartTimeChart({
       : "";
 
   return (
-    <div className="mt-3 min-h-0 w-full">
+    <div className="flex h-[8.5rem] w-full flex-col rounded-2xl bg-[#F0F0F0]/90 px-2 py-2 dark:bg-white/[0.06] sm:px-2.5">
       <svg
         viewBox={`0 0 ${w} ${h}`}
-        className="h-[8rem] w-full overflow-visible"
+        className="h-full w-full flex-1"
         role="img"
         aria-label="Heart rate over time"
       >
@@ -512,24 +517,26 @@ function ZoneScale({
       : 0.35;
 
   return (
-    <div className="mt-auto pt-3">
-      <div className="relative mb-1 h-2.5">
+    <div className="mt-auto w-full min-w-0 pt-3">
+      <div className="relative mb-1 h-2.5 px-0.5">
         <div
           className="absolute top-0 -translate-x-1/2 text-[9px] leading-none text-sky-500"
-          style={{ left: `${marker * 100}%` }}
+          style={{ left: `${Math.min(96, Math.max(4, marker * 100))}%` }}
         >
           ▼
         </div>
       </div>
-      <div className="flex h-2 overflow-hidden rounded-full">
-        <div className="flex-1 bg-[#fb7185]" />
-        <div className="flex-1 bg-[#7dd3fc]" />
-        <div className="flex-1 bg-[#38bdf8]" />
-        <div className="flex-1 bg-[#22d3ee]" />
+      <div className="flex h-2 w-full overflow-hidden rounded-full">
+        <div className="min-w-0 flex-1 bg-[#fb7185]" />
+        <div className="min-w-0 flex-1 bg-[#7dd3fc]" />
+        <div className="min-w-0 flex-1 bg-[#38bdf8]" />
+        <div className="min-w-0 flex-1 bg-[#22d3ee]" />
       </div>
-      <p className="mt-1.5 truncate text-[10px] text-muted-foreground">
-        Fat {fat} · Cardio {cardio} · Peak {peak}
-      </p>
+      <div className="mt-2 flex flex-wrap gap-x-2.5 gap-y-1 text-[10px] text-muted-foreground">
+        <span className="whitespace-nowrap">Fat {fat}</span>
+        <span className="whitespace-nowrap">Cardio {cardio}</span>
+        <span className="whitespace-nowrap">Peak {peak}</span>
+      </div>
     </div>
   );
 }
@@ -539,9 +546,28 @@ export function HealthDashboard({ snap }: { snap: HealthSnapshot }) {
   const active = snap.activity?.activeMinutes ?? 0;
   const steps = snap.activity?.steps ?? 0;
   const sleepMin = snap.sleep?.minutesAsleep ?? null;
-  const bpm = snap.heart?.restingBpm ?? snap.heart?.avgBpm ?? null;
-  const weekSteps = snap.charts?.weekSteps || [];
   const heartHourly = snap.charts?.heartHourly || [];
+  const chartBpms = useMemo(
+    () =>
+      heartHourly
+        .map((p) => p.bpm)
+        .filter((n): n is number => n != null && Number.isFinite(n))
+        .map((n) => Math.round(n)),
+    [heartHourly]
+  );
+  const chartAvg = chartBpms.length
+    ? Math.round(chartBpms.reduce((a, b) => a + b, 0) / chartBpms.length)
+    : null;
+  const chartMin = chartBpms.length ? Math.min(...chartBpms) : null;
+  const chartMax = chartBpms.length ? Math.max(...chartBpms) : null;
+  const chartLatest = chartBpms.length ? chartBpms[chartBpms.length - 1] : null;
+
+  const avgBpm = snap.heart?.avgBpm ?? chartAvg;
+  const minBpm = snap.heart?.minBpm ?? chartMin;
+  const maxBpm = snap.heart?.maxBpm ?? chartMax;
+  const bpm =
+    snap.heart?.restingBpm ?? snap.heart?.avgBpm ?? chartLatest ?? chartAvg ?? null;
+  const weekSteps = snap.charts?.weekSteps || [];
   const primaryExercise = snap.exercises?.[0];
 
   const weekBars = useMemo(() => {
@@ -552,15 +578,15 @@ export function HealthDashboard({ snap }: { snap: HealthSnapshot }) {
   return (
     <section
       className={cn(
-        "grid h-full min-h-0 w-full gap-3 sm:gap-4",
-        "grid-cols-2 auto-rows-auto",
-        "md:grid-cols-12 md:grid-rows-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
+        "grid w-full gap-3 sm:gap-4",
+        "grid-cols-1 auto-rows-auto",
+        "md:h-full md:min-h-0 md:grid-cols-12 md:grid-rows-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
       )}
     >
       {/* Top-left — summary hero */}
       <div
         className={cn(
-          "col-span-2 flex min-h-[220px] flex-col justify-between rounded-[28px] px-6 pb-6 pt-4 sm:min-h-[260px] sm:rounded-[32px] sm:px-8 sm:pb-8 sm:pt-5",
+          "col-span-1 flex min-h-[220px] flex-col justify-between rounded-[28px] px-5 pb-5 pt-4 sm:min-h-[260px] sm:rounded-[32px] sm:px-8 sm:pb-8 sm:pt-5",
           "md:col-span-7 md:col-start-1 md:row-start-1 md:h-full md:min-h-0",
           panelBg
         )}
@@ -643,21 +669,21 @@ export function HealthDashboard({ snap }: { snap: HealthSnapshot }) {
         </div>
       </div>
 
-      {/* Bottom — heart + steps (equal width) */}
+      {/* Bottom — heart + steps (stacked on mobile, equal + aligned on md+) */}
       <div
         className={cn(
-          "col-span-2 grid min-h-0 grid-cols-2 gap-3 sm:gap-4",
-          "md:col-span-7 md:col-start-1 md:row-start-2 md:h-full"
+          "col-span-1 flex min-h-0 flex-col gap-3 sm:gap-4",
+          "md:col-span-7 md:col-start-1 md:row-start-2 md:grid md:h-full md:grid-cols-2"
         )}
       >
         <div
           className={cn(
-            "flex min-h-[200px] flex-col rounded-[28px] p-4 sm:min-h-[220px] sm:rounded-[32px] sm:p-5",
+            "flex min-h-[240px] flex-col rounded-[28px] p-4 sm:rounded-[32px] sm:p-5",
             "md:h-full md:min-h-0",
             panelBg
           )}
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex h-12 shrink-0 items-start justify-between gap-2">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#F2F2F2] text-rose-500 dark:bg-white/10">
               <HugeiconsIcon icon={HeartPulseIcon} size={16} />
             </div>
@@ -668,38 +694,38 @@ export function HealthDashboard({ snap }: { snap: HealthSnapshot }) {
                   bpm
                 </span>
               </p>
-              <p className="mt-1 truncate text-[10px] text-muted-foreground">
-                Avg {fmtNum(snap.heart?.avgBpm)} · Min{" "}
-                {fmtNum(snap.heart?.minBpm)} · Max {fmtNum(snap.heart?.maxBpm)}
+              <p className="mt-1 h-4 truncate text-[10px] leading-none text-muted-foreground">
+                Avg {fmtNum(avgBpm)} · Min {fmtNum(minBpm)} · Max{" "}
+                {fmtNum(maxBpm)}
               </p>
             </div>
           </div>
-          <div className="mt-auto min-h-0">
+          <div className="mt-auto w-full pt-3">
             <HeartTimeChart points={heartHourly} />
           </div>
         </div>
 
         <div
           className={cn(
-            "flex min-h-[200px] flex-col overflow-hidden rounded-[28px] p-4 sm:min-h-[220px] sm:rounded-[32px] sm:p-5",
+            "flex min-h-[240px] flex-col rounded-[28px] p-4 sm:rounded-[32px] sm:p-5",
             "md:h-full md:min-h-0",
             panelBg
           )}
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex h-12 shrink-0 items-start justify-between gap-2">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#F2F2F2] text-[#C9A227] dark:bg-white/10 dark:text-[#A8860D]">
               <HugeiconsIcon icon={FootprintsIcon} size={16} />
             </div>
             <div className="min-w-0 text-right">
-              <p className="font-mono text-2xl font-semibold leading-none tracking-tight text-[#C9A227] tabular-nums dark:text-[#A8860D] sm:text-[2rem]">
+              <p className="font-mono text-2xl font-semibold leading-none tracking-tight text-[#C9A227] tabular-nums dark:text-[#A8860D]">
                 {fmtNum(steps)}
               </p>
-              <p className="mt-1 text-[10px] text-muted-foreground">
+              <p className="mt-1 h-4 truncate text-[10px] leading-none text-muted-foreground">
                 Goal {fmtNum(GOALS.steps)} steps
               </p>
             </div>
           </div>
-          <div className="mt-auto pt-3">
+          <div className="mt-auto w-full pt-3">
             <StepsDayBars points={weekBars} />
           </div>
         </div>
@@ -708,7 +734,7 @@ export function HealthDashboard({ snap }: { snap: HealthSnapshot }) {
       {/* Right — sleep + active zone stack */}
       <div
         className={cn(
-          "col-span-2 flex min-h-[280px] flex-col rounded-[28px] p-5 ring-1 ring-black/[0.04] sm:min-h-[320px] sm:rounded-[32px] sm:p-6 dark:ring-white/[0.06]",
+          "col-span-1 flex min-h-0 flex-col overflow-hidden rounded-[28px] p-4 ring-1 ring-black/[0.04] sm:rounded-[32px] sm:p-6 dark:ring-white/[0.06]",
           "md:col-span-5 md:col-start-8 md:row-span-2 md:row-start-1 md:h-full md:min-h-0",
           panelBg
         )}
@@ -723,7 +749,7 @@ export function HealthDashboard({ snap }: { snap: HealthSnapshot }) {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 sm:gap-4">
-          <div className="flex min-h-0 flex-1 flex-col rounded-[22px] bg-neutral-50 px-4 py-4 dark:bg-white/10 sm:rounded-[26px] sm:px-5 sm:py-5">
+          <div className="flex min-h-[160px] flex-col overflow-hidden rounded-[22px] bg-neutral-50 px-4 py-4 dark:bg-white/10 sm:min-h-0 sm:flex-1 sm:rounded-[26px] sm:px-5 sm:py-5">
             <div className="flex items-start justify-between gap-2">
               <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-600 dark:text-violet-400">
                 <HugeiconsIcon icon={Moon01Icon} size={16} />
@@ -738,7 +764,7 @@ export function HealthDashboard({ snap }: { snap: HealthSnapshot }) {
             <SleepStageBar stages={snap.sleep?.stages} />
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col rounded-[22px] bg-neutral-50 px-4 py-4 dark:bg-white/10 sm:rounded-[26px] sm:px-5 sm:py-5">
+          <div className="flex min-h-[160px] flex-col overflow-hidden rounded-[22px] bg-neutral-50 px-4 py-4 dark:bg-white/10 sm:min-h-0 sm:flex-1 sm:rounded-[26px] sm:px-5 sm:py-5">
             <div className="flex items-start justify-between gap-2">
               <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400">
                 <HugeiconsIcon icon={Activity01Icon} size={16} />

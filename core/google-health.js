@@ -577,19 +577,31 @@ export async function fetchGoogleHealthSnapshot(userDoc, { date } = {}) {
   let heartHourly = (heartHourlyRes?.rollupDataPoints || []).map((p) => {
     const t = p.startTime || p.civilStartTime;
     let label = '';
+    let sortKey = 0;
     if (typeof t === 'string') {
       const dt = new Date(t);
-      label = Number.isNaN(dt.getTime())
-        ? ''
-        : dt.toLocaleTimeString([], { hour: 'numeric' });
+      if (!Number.isNaN(dt.getTime())) {
+        label = dt.toLocaleTimeString([], { hour: 'numeric' });
+        sortKey = dt.getTime();
+      }
     } else if (t?.date) {
-      label = `${String(t.time?.hours ?? 0).padStart(2, '0')}:00`;
+      const hours = t.time?.hours ?? 0;
+      label = `${String(hours).padStart(2, '0')}:00`;
+      sortKey = hours * 3600 + (t.time?.minutes ?? 0) * 60;
     }
     return {
       label,
-      bpm: pickNum(p.heartRate?.beatsPerMinuteAvg),
+      sortKey,
+      bpm: pickNum(
+        p.heartRate?.beatsPerMinuteAvg,
+        p.heartRate?.beats_per_minute_avg,
+        p.heart_rate?.beatsPerMinuteAvg
+      ),
     };
   }).filter((p) => p.bpm != null);
+
+  heartHourly.sort((a, b) => a.sortKey - b.sortKey);
+  heartHourly = heartHourly.map(({ label, bpm }) => ({ label, bpm }));
 
   // Fallback sparkline from daily min/avg/max if hourly rollup empty
   if (!heartHourly.length) {
@@ -608,6 +620,32 @@ export async function fetchGoogleHealthSnapshot(userDoc, { date } = {}) {
       });
     }
   }
+
+  // Daily heart-rate rollup is often empty; derive from hourly samples.
+  const hourlyBpms = heartHourly.map((p) => p.bpm).filter((n) => typeof n === 'number');
+  const fromHourly =
+    hourlyBpms.length > 0
+      ? {
+          avg: Math.round(hourlyBpms.reduce((a, b) => a + b, 0) / hourlyBpms.length),
+          min: Math.min(...hourlyBpms),
+          max: Math.max(...hourlyBpms),
+          latest: hourlyBpms[hourlyBpms.length - 1],
+        }
+      : null;
+
+  const avgBpm =
+    pickNum(hrR?.heartRate?.beatsPerMinuteAvg, hrR?.heartRate?.beats_per_minute_avg) ??
+    fromHourly?.avg ??
+    null;
+  const minBpm =
+    pickNum(hrR?.heartRate?.beatsPerMinuteMin, hrR?.heartRate?.beats_per_minute_min) ??
+    fromHourly?.min ??
+    null;
+  const maxBpm =
+    pickNum(hrR?.heartRate?.beatsPerMinuteMax, hrR?.heartRate?.beats_per_minute_max) ??
+    fromHourly?.max ??
+    null;
+  const restingBpm = matchDailyRestingHr(rhrRes?.dataPoints, day);
 
   return {
     date: day,
@@ -633,10 +671,10 @@ export async function fetchGoogleHealthSnapshot(userDoc, { date } = {}) {
       floors: pickNum(floorsR?.floors?.countSum),
     },
     heart: {
-      avgBpm: pickNum(hrR?.heartRate?.beatsPerMinuteAvg),
-      minBpm: pickNum(hrR?.heartRate?.beatsPerMinuteMin),
-      maxBpm: pickNum(hrR?.heartRate?.beatsPerMinuteMax),
-      restingBpm: matchDailyRestingHr(rhrRes?.dataPoints, day),
+      avgBpm,
+      minBpm,
+      maxBpm,
+      restingBpm: restingBpm ?? fromHourly?.latest ?? avgBpm ?? null,
     },
     sleep: summarizeSleep(sleepRes?.dataPoints),
     exercises: summarizeExercises(exerciseRes?.dataPoints),
