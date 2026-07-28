@@ -6,6 +6,7 @@ import {
   SearchIcon,
   CheckIcon,
   ChevronDownIcon,
+  CopyIcon,
   LibraryIcon,
   LinkIcon,
   PauseIcon,
@@ -65,6 +66,9 @@ type LibraryScript = {
   defaultIntervalMs: number | null;
   requires: string[];
 };
+
+const DEFAULT_LIBRARY_RAW_URL =
+  "https://raw.githubusercontent.com/jotx19/tinyjot-automations/main";
 
 function formatInterval(ms: number | null | undefined) {
   if (!ms || ms <= 0) return null;
@@ -155,6 +159,7 @@ export default function AutomationPage() {
   const openSettings = useChatUiStore((s) => s.openSettings);
   const [openName, setOpenName] = useState<string | null>(null);
   const [librarySearch, setLibrarySearch] = useState("");
+  const [copiedLibraryUrl, setCopiedLibraryUrl] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<SandboxScript | null>(
     null
   );
@@ -334,6 +339,19 @@ export default function AutomationPage() {
     connectLibrary.mutate();
   };
 
+  const copyLibraryUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(DEFAULT_LIBRARY_RAW_URL);
+      setCopiedLibraryUrl(true);
+      toast.success("Library URL copied");
+      openSettings("automation");
+      window.setTimeout(() => setCopiedLibraryUrl(false), 1600);
+    } catch {
+      toast.error("Could not copy");
+      openSettings("automation");
+    }
+  };
+
   return (
     <AppShell>
       <div className="mx-auto flex min-h-svh w-full max-w-4xl flex-col px-3 py-14 md:px-6 md:py-8">
@@ -425,12 +443,36 @@ export default function AutomationPage() {
           </p>
         ) : !sorted.length ? (
           <div
-            className={cn("mb-6 rounded-2xl px-5 py-10 text-center", panelBg)}
+            className={cn("mb-6 rounded-2xl px-5 py-8 text-center", panelBg)}
           >
             <p className="text-sm font-medium">No sandbox scripts yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Connect a library repo below and install a script.
+            <p className="mb-6 text-xs text-muted-foreground">
+              Paste a library URL in Settings Automation, Connect, then Get a
+              script.
             </p>
+            <div className="mx-auto flex max-w-xl items-center gap-2 rounded-xl border border-border/60 bg-background/40 px-3 py-2 text-left">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] text-muted-foreground">
+                </p>
+                <p className="mt-0.5 truncate font-mono text-xs text-foreground">
+                  {DEFAULT_LIBRARY_RAW_URL}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
+                onClick={() => void copyLibraryUrl()}
+              >
+                {copiedLibraryUrl ? (
+                  <CheckIcon className="size-3.5" />
+                ) : (
+                  <CopyIcon className="size-3.5" />
+                )}
+                {copiedLibraryUrl ? "Copied" : "Copy"}
+              </Button>
+            </div>
           </div>
         ) : (
           <ul className="mb-6 space-y-2">
