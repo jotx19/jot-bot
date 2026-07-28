@@ -221,12 +221,17 @@ export default function AutomationPage() {
     const q = librarySearch.trim().toLowerCase();
     if (!q) return libraryScripts;
     return libraryScripts.filter((item) => {
-      return (
-        item.title.toLowerCase().includes(q) ||
-        item.name.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q)
-      );
+      const haystack = [
+        item.title,
+        item.name,
+        item.description,
+        item.category,
+        ...(Array.isArray(item.requires) ? item.requires : []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
     });
   }, [libraryScripts, librarySearch]);
 
@@ -584,25 +589,47 @@ export default function AutomationPage() {
 
         {/* Script library */}
         <div className="mt-2">
-          <div className="flex flex-wrap items-center gap-2.5 p-2.5">
-            <p className="mr-auto text-sm uppercase font-medium tracking-tight">
+          <div className="flex flex-nowrap items-center gap-2 px-0.5 sm:gap-2.5">
+            <p className="shrink-0 text-sm font-medium tracking-tight uppercase">
               Library
             </p>
-            <label className="relative min-w-0 flex-1 basis-[11rem] sm:max-w-[16rem]">
+            <div className="relative z-10 min-w-0 flex-1 sm:max-w-[16rem]">
               <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
+                id="library-search"
+                type="search"
                 value={librarySearch}
                 onChange={(e) => setLibrarySearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.preventDefault();
+                }}
                 placeholder="Search"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 className="h-8 w-full rounded-lg border border-border/60 bg-transparent pr-2.5 pl-8 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-border"
               />
-            </label>
+            </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
+              aria-label={
+                connectLibrary.isPending
+                  ? "Connecting"
+                  : libraryConnected
+                    ? "Connected — reconnect library"
+                    : "Connect library"
+              }
+              title={
+                libraryConnected
+                  ? "Connected"
+                  : connectLibrary.isPending
+                    ? "Connecting…"
+                    : "Connect"
+              }
               className={cn(
-                "h-8 shrink-0 rounded-lg px-3 text-xs",
+                "size-8 shrink-0 rounded-lg p-0 sm:h-8 sm:w-auto sm:px-3 sm:text-xs",
                 libraryConnected &&
                   "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 hover:text-emerald-300"
               )}
@@ -610,11 +637,13 @@ export default function AutomationPage() {
               onClick={handleConnect}
             >
               <LinkIcon className="size-3.5" />
-              {connectLibrary.isPending
-                ? "Connecting…"
-                : libraryConnected
-                  ? "Connected"
-                  : "Connect"}
+              <span className="hidden sm:inline">
+                {connectLibrary.isPending
+                  ? "Connecting…"
+                  : libraryConnected
+                    ? "Connected"
+                    : "Connect"}
+              </span>
             </Button>
           </div>
           {libraryQuery.data?.remoteError ? (
@@ -624,7 +653,7 @@ export default function AutomationPage() {
           ) : null}
 
           <div className="mt-2">
-            {libraryQuery.isLoading ? (
+            {libraryQuery.isLoading && !libraryScripts.length ? (
               <div className="divide-y divide-border/50">
                 {Array.from({ length: 2 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-3 py-2.5">
