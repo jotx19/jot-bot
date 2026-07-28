@@ -23,6 +23,13 @@ import {
   notionDeletePage,
 } from './mcp.js';
 import {
+  fetchGoogleHealthSnapshot,
+  fetchGoogleHealthWeekSteps,
+  formatGoogleHealthSnapshotMarkdown,
+  getGoogleHealthUserForRequest,
+  isLikelyHealthTaskRequest,
+} from './google-health.js';
+import {
   cancel as cancelScheduled,
   formatScheduledReply,
   isScheduledListRequest,
@@ -825,8 +832,81 @@ async function handleRecruiterEmail(message, history, options = {}) {
 }
 
 /**
+ * HEALTH — Google Health (Fitbit / Pixel Watch) snapshot + optional LLM coach.
+ */
+async function handleHealthTask(message, history, options = {}) {
+  try {
+    const user = await getGoogleHealthUserForRequest();
+    if (!user) {
+      const reply =
+        '**Sign in required** to use Google Health coaching.';
+      if (options.onToken) options.onToken(reply);
+      return { intent: 'TASK', reply, toolUsed: null };
+    }
+    if (!user.settings?.googleHealthRefreshToken) {
+      const reply =
+        '**Google Health is not connected.** Open **Integrations** → **Connect Google Health**, authorize Fitbit / Pixel Watch data, then try again.\n\nTry: `/health summarize today`';
+      if (options.onToken) options.onToken(reply);
+      return { intent: 'TASK', reply, toolUsed: 'google-health' };
+    }
+
+    const snapshot = await fetchGoogleHealthSnapshot(user);
+    const weekSteps = await fetchGoogleHealthWeekSteps(user).catch(() => []);
+    const matrix = formatGoogleHealthSnapshotMarkdown(snapshot);
+
+    const wantsCoach = /\b(coach|advice|recommend|how|improve|overtrain|summarize|summary|what|should)\b/i.test(
+      message
+    );
+
+    if (!wantsCoach && /^(show|get|fetch|check)\b/i.test(message.trim())) {
+      if (options.onToken) options.onToken(matrix);
+      return { intent: 'TASK', reply: matrix, toolUsed: 'google-health', toolResult: snapshot };
+    }
+
+    const systemPrompt = await withMemory(
+      `You are ${getBotName()}, a concise AI wellness coach (not a doctor).
+You received REAL Google Health / Fitbit metrics for the user — do not invent numbers.
+Give a short markdown coach note:
+- 3–6 bullets: what looks good, what to watch, one practical tip for today
+- Flag low sleep, very high sedentary minutes, or missing data briefly
+- Never diagnose disease; say this is wellness guidance only
+Do not repeat the raw metrics table — it is already shown above your note.`,
+      message
+    );
+
+    const userBlock = [
+      `User request: ${message}`,
+      'Google Health snapshot:',
+      JSON.stringify({ snapshot, weekSteps }, null, 2),
+      'Formatted matrix (already shown to user):',
+      matrix,
+    ].join('\n\n');
+
+    const prefix = `${matrix}\n\n---\n\n`;
+    if (options.onToken) options.onToken(prefix);
+
+    const coach = await callLLM(
+      [...history.slice(-4), { role: 'user', content: userBlock }],
+      systemPrompt,
+      { stream: true, onToken: options.onToken }
+    );
+
+    return {
+      intent: 'TASK',
+      reply: `${prefix}${coach}`,
+      toolUsed: 'google-health',
+      toolResult: snapshot,
+    };
+  } catch (err) {
+    const reply = logAndPublicError(err, 'intent/health');
+    if (options.onToken) options.onToken(reply);
+    return { intent: 'TASK', reply, toolUsed: 'google-health' };
+  }
+}
+
+/**
  * Normalize client preferTool (from /slash command).
- * @returns {'websearch'|'notion'|'sandbox'|null}
+ * @returns {'websearch'|'notion'|'sandbox'|'health'|null}
  */
 function normalizePreferTool(raw) {
   const t = String(raw || '')
@@ -836,6 +916,7 @@ function normalizePreferTool(raw) {
   if (t === 'websearch' || t === 'web' || t === 'search') return 'websearch';
   if (t === 'notion') return 'notion';
   if (t === 'sandbox' || t === 'selfbuild') return 'sandbox';
+  if (t === 'health' || t === 'fitbit' || t === 'fitness') return 'health';
   return null;
 }
 
@@ -867,6 +948,15 @@ export async function routeMessage(message, history = [], options = {}) {
   if (preferTool === 'notion') {
     console.log(`[intent] PREFER notion — session ${options.sessionId || 'none'}`);
     return handleMcpTask(message, history, { ...options, preferTool: 'notion' });
+  }
+  if (preferTool === 'health') {
+    console.log(`[intent] PREFER health — session ${options.sessionId || 'none'}`);
+    return handleHealthTask(message, history, options);
+  }
+
+  if (isLikelyHealthTaskRequest(message)) {
+    console.log(`[intent] HEALTH_TASK — session ${options.sessionId || 'none'}`);
+    return handleHealthTask(message, history, options);
   }
 
   if (isRecruiterEmailRequest(message)) {

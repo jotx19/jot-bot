@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { CodeBlock } from "@/components/chat/code-block";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, panelBg } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -138,12 +138,12 @@ export default function AutomationPage() {
         <div className="mb-6 grid grid-cols-2 gap-2 sm:gap-3">
           {isLoading ? (
             <>
-              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+              <div className={cn("rounded-2xl px-4 py-4", panelBg)}>
                 <Skeleton className="h-3 w-20" />
                 <Skeleton className="mt-3 h-9 w-16" />
                 <Skeleton className="mt-2 h-3 w-28" />
               </div>
-              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+              <div className={cn("rounded-2xl px-4 py-4", panelBg)}>
                 <Skeleton className="h-3 w-16" />
                 <Skeleton className="mt-3 h-9 w-12" />
                 <Skeleton className="mt-2 h-3 w-24" />
@@ -151,7 +151,7 @@ export default function AutomationPage() {
             </>
           ) : (
             <>
-              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+              <div className={cn("rounded-2xl px-4 py-4", panelBg)}>
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Total runs
                 </p>
@@ -164,7 +164,7 @@ export default function AutomationPage() {
                     : "Across all scripts"}
                 </p>
               </div>
-              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+              <div className={cn("rounded-2xl px-4 py-4", panelBg)}>
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Scripts
                 </p>
@@ -194,7 +194,7 @@ export default function AutomationPage() {
             {(error as Error)?.message || "Failed to load scripts"}
           </p>
         ) : !sorted.length ? (
-          <div className="rounded-2xl bg-muted/40 px-5 py-10 text-center">
+          <div className={cn("rounded-2xl px-5 py-10 text-center", panelBg)}>
             <p className="text-sm font-medium">No sandbox scripts yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Ask the assistant to save a script in the sandbox, or schedule one
@@ -209,7 +209,7 @@ export default function AutomationPage() {
               return (
                 <li
                   key={script.name}
-                  className="overflow-hidden rounded-2xl bg-muted/50 dark:bg-neutral-900/80"
+                  className={cn("overflow-hidden rounded-2xl", panelBg)}
                 >
                   <div className="flex items-center gap-2 px-3 py-3 sm:px-4">
                     <button

@@ -17,9 +17,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, panelBg } from "@/lib/utils";
 import { toast } from "sonner";
 import { useChatUiStore } from "@/stores/app-store";
+import { GoogleHealthConnectCard } from "@/components/mcp/google-health-connect-card";
 
 type McpIntegrationsPanelProps = {
   variant?: "page" | "settings";
@@ -113,7 +114,7 @@ export function McpIntegrationsPanel({
   };
 
   const cardClass = isPage
-    ? "overflow-hidden rounded-2xl bg-muted/50 dark:bg-neutral-900/80"
+    ? cn("overflow-hidden rounded-2xl", panelBg)
     : "space-y-3 rounded-xl border border-white/10 bg-white/5 p-3";
 
   const addServer = () => {
@@ -161,18 +162,18 @@ export function McpIntegrationsPanel({
         <div className="grid grid-cols-2 gap-2 sm:gap-3">
           {isLoading ? (
             <>
-              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+              <div className={cn("rounded-2xl px-4 py-4", panelBg)}>
                 <Skeleton className="h-3 w-20" />
                 <Skeleton className="mt-3 h-9 w-12" />
               </div>
-              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+              <div className={cn("rounded-2xl px-4 py-4", panelBg)}>
                 <Skeleton className="h-3 w-16" />
                 <Skeleton className="mt-3 h-9 w-12" />
               </div>
             </>
           ) : (
             <>
-              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+              <div className={cn("rounded-2xl px-4 py-4", panelBg)}>
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Connected
                 </p>
@@ -185,7 +186,7 @@ export function McpIntegrationsPanel({
                     : "None enabled"}
                 </p>
               </div>
-              <div className="rounded-2xl bg-muted/50 px-4 py-4 dark:bg-neutral-900/80">
+              <div className={cn("rounded-2xl px-4 py-4", panelBg)}>
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Tools
                 </p>
@@ -200,6 +201,8 @@ export function McpIntegrationsPanel({
           )}
         </div>
       )}
+
+      <GoogleHealthConnectCard variant={variant} />
 
       <div
         className={cn(
@@ -220,7 +223,7 @@ export function McpIntegrationsPanel({
           <div
             className={cn(
               isPage
-                ? "rounded-2xl bg-muted/40 px-5 py-10 text-center"
+                ? cn("rounded-2xl px-5 py-10 text-center", panelBg)
                 : "text-sm text-muted-foreground"
             )}
           >

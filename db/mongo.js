@@ -80,6 +80,18 @@ const userSchema = new mongoose.Schema({
     openrouterModel: { type: String, default: '', trim: true },
     /** Keep chats for N days (7 | 11 | 15), then auto-delete. */
     chatRetentionDays: { type: Number, default: 7, enum: [7, 11, 15] },
+    /** Google Health OAuth (Fitbit / Pixel Watch) — never expose tokens via publicUser. */
+    googleHealthAccessToken: { type: String, default: '' },
+    googleHealthRefreshToken: { type: String, default: '' },
+    googleHealthTokenExpiresAt: { type: Date, default: null },
+    googleHealthConnectedAt: { type: Date, default: null },
+    googleHealthScopes: { type: String, default: '' },
+    /** @deprecated legacy Fitbit Web API — cleared on Google Health connect */
+    fitbitAccessToken: { type: String, default: '' },
+    fitbitRefreshToken: { type: String, default: '' },
+    fitbitUserId: { type: String, default: '' },
+    fitbitTokenExpiresAt: { type: Date, default: null },
+    fitbitConnectedAt: { type: Date, default: null },
     /**
      * User-configured MCP servers (stdio / HTTP / SSE).
      * Secrets live in env/headers — never return raw values via publicUser.

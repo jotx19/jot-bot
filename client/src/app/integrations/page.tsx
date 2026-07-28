@@ -22,7 +22,8 @@ export default function IntegrationsPage() {
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Integrations</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              MCP servers connected to chat — Notion, filesystem, and more
+              Google Health (Fitbit / Pixel Watch) and MCP servers — Notion,
+              filesystem, and more
             </p>
           </div>
           <Button

@@ -30,6 +30,18 @@ import {
   mcpConfigsFromUserDoc,
 } from './core/mcp.js';
 import {
+  buildGoogleHealthOAuthUrl,
+  clearGoogleHealthOAuthForUser,
+  completeGoogleHealthOAuthForUser,
+  fetchGoogleHealthSnapshot,
+  formatGoogleHealthSnapshotMarkdown,
+  getClientAppUrl,
+  getGoogleHealthOAuthRedirectUri,
+  googleHealthOAuthPublicStatus,
+  isGoogleHealthOAuthConfigured,
+  verifyGoogleHealthOAuthState,
+} from './core/google-health.js';
+import {
   isAuthEnabled,
   isUserAuthEnabled,
   isLegacyPasswordAuth,
@@ -241,8 +253,41 @@ app.post('/api/auth/logout', (_req, res) => {
   return res.json({ ok: true });
 });
 
+/**
+ * Google Health OAuth callback — public (auth via signed state).
+ * Register redirect URI on the Google Cloud OAuth Web client:
+ *   {API_PUBLIC_URL}/api/integrations/google-health/callback
+ */
+app.get('/api/integrations/google-health/callback', async (req, res) => {
+  const appUrl = getClientAppUrl();
+  const fail = (msg) =>
+    res.redirect(
+      `${appUrl}/integrations?health=error&message=${encodeURIComponent(msg)}`
+    );
+
+  try {
+    if (req.query.error) {
+      return fail(String(req.query.error_description || req.query.error));
+    }
+    const code = req.query.code;
+    const verified = verifyGoogleHealthOAuthState(req.query.state);
+    if (!verified?.userId) {
+      return fail('Invalid or expired OAuth state — try connecting again.');
+    }
+    if (!code) return fail('Missing authorization code from Google.');
+
+    await completeGoogleHealthOAuthForUser(verified.userId, code);
+    console.log(`[google-health-oauth] connected user=${verified.userId}`);
+    return res.redirect(`${appUrl}/integrations?health=connected`);
+  } catch (e) {
+    console.warn('[google-health-oauth/callback]', e.message);
+    return fail(e.message || 'Google Health connection failed');
+  }
+});
+
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/')) return next();
+  if (req.path.startsWith('/integrations/google-health/callback')) return next();
   return requireAuth(req, res, next);
 });
 
@@ -263,6 +308,7 @@ app.get('/api/settings', async (req, res) => {
       user: publicUser(user),
       discordBotConfigured: Boolean(process.env.DISCORD_BOT_TOKEN?.trim()),
       serverOpenrouterFallback: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
+      googleHealthOAuth: googleHealthOAuthPublicStatus(user),
       hints: {
         discordUserId:
           'Discord → Settings → Advanced → Developer Mode → right-click your name → Copy User ID',
@@ -271,6 +317,9 @@ app.get('/api/settings', async (req, res) => {
         botToken: 'DISCORD_BOT_TOKEN stays in server .env / Render (one bot per deploy).',
         byok: 'Your OpenRouter key is stored for your account only. Leave blank to use the server fallback key if configured.',
         mcp: `Add up to ${MCP_MAX_SERVERS} MCP servers (HTTP URL or local stdio). Tools appear in chat automatically when enabled.`,
+        googleHealth: isGoogleHealthOAuthConfigured()
+          ? `Connect Google Health on Integrations — redirect URI ${getGoogleHealthOAuthRedirectUri()}`
+          : 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable Google Health connect.',
       },
     });
   } catch (err) {
@@ -365,6 +414,74 @@ app.put('/api/settings', async (req, res) => {
     return res.json({ ok: true, user: publicUser(doc) });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+/** Start Google Health OAuth — returns Google consent URL. */
+app.get('/api/integrations/google-health/connect', async (req, res) => {
+  try {
+    if (!req.auth?.userId) {
+      return res.status(400).json({ error: 'Sign in required', code: 'USER_REQUIRED' });
+    }
+    if (!isGoogleHealthOAuthConfigured()) {
+      return res.status(503).json({
+        error:
+          'Google Health is not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to server .env.',
+        code: 'GOOGLE_HEALTH_OAUTH_UNAVAILABLE',
+      });
+    }
+    const url = buildGoogleHealthOAuthUrl(req.auth.userId);
+    return res.json({ url, redirectUri: getGoogleHealthOAuthRedirectUri() });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/integrations/google-health/status', async (req, res) => {
+  try {
+    const user = await loadRequestUser(req);
+    return res.json(googleHealthOAuthPublicStatus(user));
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/integrations/google-health', async (req, res) => {
+  try {
+    if (!req.auth?.userId) {
+      return res.status(400).json({ error: 'Sign in required', code: 'USER_REQUIRED' });
+    }
+    const doc = await clearGoogleHealthOAuthForUser(req.auth.userId);
+    return res.json({ ok: true, user: publicUser(doc) });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+/** Fetch today's Google Health snapshot for the signed-in user. */
+app.get('/api/integrations/google-health/summary', async (req, res) => {
+  try {
+    if (!req.auth?.userId) {
+      return res.status(400).json({ error: 'Sign in required', code: 'USER_REQUIRED' });
+    }
+    const user = await User.findById(req.auth.userId).lean();
+    if (!user?.settings?.googleHealthRefreshToken) {
+      return res.status(400).json({
+        error: 'Google Health not connected',
+        code: 'GOOGLE_HEALTH_NOT_CONNECTED',
+      });
+    }
+    const snapshot = await fetchGoogleHealthSnapshot(user, {
+      date: req.query.date || undefined,
+    });
+    return res.json({
+      ok: true,
+      snapshot,
+      markdown: formatGoogleHealthSnapshotMarkdown(snapshot),
+    });
+  } catch (err) {
+    console.warn('[google-health/summary]', err.message);
+    return res.status(400).json({ error: err.message });
   }
 });
 

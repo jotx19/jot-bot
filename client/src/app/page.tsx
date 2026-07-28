@@ -49,7 +49,7 @@ export default function LandingPage() {
         <section className="relative flex min-h-svh items-end overflow-hidden">
           <Image
             src="/hero-bg.jpeg"
-            alt=""
+            alt="tinyjot — your personal AI runtime with chat, memory, and tools"
             fill
             priority
             className="landing-hero-image object-cover object-center"

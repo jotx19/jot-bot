@@ -1,11 +1,15 @@
 {
   "name": "tinyjot",
   "short_name": "tinyjot",
-  "description": "Personal AI runtime",
+  "description": "Personal AI runtime — chat, memory, tools, Google Health, Discord",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "categories": ["productivity", "utilities"],
+  "lang": "en",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -18,6 +22,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

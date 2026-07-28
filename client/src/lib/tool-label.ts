@@ -7,6 +7,8 @@ const BUILTIN: Record<string, string> = {
   "notion-append": "Notion · Update",
   "notion-create": "Notion · Create",
   "notion-delete": "Notion · Delete",
+  "google-health": "Health",
+  "fitbit-health": "Health",
 };
 
 const MCP_ACTIONS: Record<string, string> = {

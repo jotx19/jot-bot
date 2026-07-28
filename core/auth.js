@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { User, isMongoReady } from '../db/mongo.js';
 import { publicMcpServers } from './mcp.js';
+import { googleHealthOAuthPublicStatus } from './google-health.js';
 
 export const SESSION_COOKIE = 'tinyjot_session';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -290,6 +291,7 @@ export function publicUser(doc) {
         ? Number(doc.settings.chatRetentionDays)
         : 7,
       mcpServers: publicMcpServers(doc.settings?.mcpServers),
+      googleHealth: googleHealthOAuthPublicStatus(doc),
     },
   };
 }

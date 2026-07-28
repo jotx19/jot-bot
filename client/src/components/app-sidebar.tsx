@@ -14,6 +14,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
   CalendarClockIcon,
+  HeartPulseIcon,
   WorkflowSquare01Icon,
 } from "@hugeicons/core-free-icons";
 import { api, type ChatSessionSummary } from "@/lib/api";
@@ -128,6 +129,12 @@ const navItems = [
     href: "/scheduled",
     label: "Scheduled",
     icon: CalendarClockIcon,
+    lucide: false,
+  },
+  {
+    href: "/health",
+    label: "Health",
+    icon: HeartPulseIcon,
     lucide: false,
   },
   {
@@ -259,8 +266,8 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
         className="z-40 transform-gpu will-change-transform"
       >
         <SidebarHeader className="gap-3">
-          <div className="flex w-full gap-2 bg-black/50 rounded-md items-center justify-center px-3 md:mt-1">
-            <TinyjotLogo size="lg" className="bg-transparent" /> <span className="text-sm text-foreground font-semibold">tinyjot</span>
+          <div className="flex w-full gap-2 dark:bg-black/50 bg-blue-500 rounded-md items-center justify-center px-3 md:mt-1">
+            <TinyjotLogo size="lg" className="bg-transparent" /> <span className="text-sm dark:text-foreground text-white font-semibold">tinyjot</span>
           </div>
 
           <div className="px-1.5 pt-1 md:mt-5 md:pt-0">

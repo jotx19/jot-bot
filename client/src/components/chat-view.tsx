@@ -269,15 +269,24 @@ export function ChatView() {
   const send = async () => {
     const raw = input.trim();
     if (!raw || busy) return;
-    const slash = raw.match(/^\/(websearch|notion|sandbox|web|search)\b[\s:,-]*/i);
+    const slash = raw.match(
+      /^\/(websearch|notion|sandbox|health|fitbit|fitness|web|search)\b[\s:,-]*/i
+    );
     let preferTool: string | null = null;
     let text = raw;
     if (slash) {
       const key = slash[1].toLowerCase();
       preferTool =
-        key === "web" || key === "search" ? "websearch" : key;
+        key === "web" || key === "search"
+          ? "websearch"
+          : key === "fitbit" || key === "fitness"
+            ? "health"
+            : key;
       text = raw.slice(slash[0].length).trim();
-      if (!text) return;
+      if (!text) {
+        if (preferTool === "health") text = "summarize today";
+        else return;
+      }
     }
     setInput("");
     await runTurn(text, messages, preferTool);

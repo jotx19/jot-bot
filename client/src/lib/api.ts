@@ -67,6 +67,77 @@ export type McpServerPublic = {
   hasHeaders?: boolean;
 };
 
+export type GoogleHealthStatus = {
+  connected: boolean;
+  connectedAt?: string | null;
+  oauthAvailable: boolean;
+  redirectUri?: string;
+};
+
+export type HealthSnapshot = {
+  date: string;
+  source?: string;
+  api?: string;
+  identity?: {
+    healthUserId?: string | null;
+    legacyFitbitUserId?: string | null;
+  };
+  profile?: {
+    age?: number | null;
+  };
+  devices?: Array<{
+    name: string;
+    type?: string | null;
+    batteryStatus?: string | null;
+    batteryLevel?: number | null;
+    lastSyncTime?: string | null;
+  }>;
+  activity?: {
+    steps?: number | null;
+    activeMinutes?: number | null;
+    activeMinutesByLevel?: Record<string, number>;
+    activeZoneMinutes?: number | null;
+    activeZoneMinutesDetail?: {
+      total: number;
+      fatBurn: number;
+      cardio: number;
+      peak: number;
+    } | null;
+    sedentaryMinutes?: number | null;
+    calories?: number | null;
+    distanceKm?: number | null;
+    floors?: number | null;
+  };
+  heart?: {
+    avgBpm?: number | null;
+    minBpm?: number | null;
+    maxBpm?: number | null;
+    restingBpm?: number | null;
+  };
+  sleep?: {
+    minutesAsleep?: number | null;
+    minutesAwake?: number | null;
+    minutesInSleepPeriod?: number | null;
+    minutesToFallAsleep?: number | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    stages?: Record<string, number>;
+    type?: string | null;
+  } | null;
+  exercises?: Array<{
+    name: string;
+    type?: string | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    activeDurationMinutes?: number | null;
+  }>;
+  charts?: {
+    weekSteps?: Array<{ date: string | null; steps: number | null }>;
+    heartHourly?: Array<{ label: string; bpm: number | null }>;
+  };
+  errors?: Record<string, string | null>;
+};
+
 export type PublicUser = {
   id: string;
   username: string;
@@ -85,6 +156,7 @@ export type PublicUser = {
     openrouterApiKeyHint?: string;
     chatRetentionDays?: 7 | 11 | 15;
     mcpServers?: McpServerPublic[];
+    googleHealth?: GoogleHealthStatus;
   };
 };
 
