@@ -73,8 +73,8 @@ export default function LandingPage() {
                 Your personal AI, ready when you are.
               </h1>
               <p className="mt-5 max-w-md text-base leading-relaxed text-white/75 sm:text-lg">
-                Chat with memory, tools, and Discord — a private runtime that
-                stays yours.
+                tinyjot is a personal AI chat agent with memory, tools, Google
+                Health, and Discord — a private runtime that stays yours.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <Link
@@ -115,7 +115,7 @@ export default function LandingPage() {
             </h2>
             <p className="mt-4 text-base leading-relaxed text-neutral-600 dark:text-neutral-400 sm:text-lg">
               tinyjot keeps chats, remembers context, runs sandbox tools, and can
-              talk to Discord when you need it. No dashboard clutter just a
+              talk to Discord when you need it. No dashboard clutter — just a
               focused place to think with an agent that already knows your setup.
             </p>
           </div>
