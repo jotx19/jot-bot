@@ -1,6 +1,6 @@
 # jot-bot (tinyjot)
 
-Personal AI runtime you host yourself. It routes intent, remembers what matters, searches the web, runs tools, and can write and schedule its own sandbox scripts — via **web chat** and **Discord**.
+Personal AI runtime you host yourself. It routes intent, remembers what matters, searches the web, runs tools, and can schedule vetted sandbox automations — via **web chat** and **Discord**.
 
 No SaaS subscription: bring your own [OpenRouter](https://openrouter.ai) key (free models work), MongoDB, and optional Discord bot.
 
@@ -12,7 +12,7 @@ No SaaS subscription: bring your own [OpenRouter](https://openrouter.ai) key (fr
 | **Memory** | Graph facts in MongoDB; optional Qdrant vector RAG |
 | **Search** | Live web / stocks / Wikipedia via Serper, Yahoo, DuckDuckGo |
 | **Tools** | Calculator, URL summarize, recruiter email lookup, per-user MCP servers |
-| **Self-build** | LLM writes Node scripts, save to sandbox, run or schedule |
+| **Automation** | Install vetted sandbox scripts from the library; schedule, pause, Discord notify |
 | **Accounts** | Register / login; chats scoped per user |
 | **Settings UI** | Discord allowlist + notify channel — no `.env` edits for those |
 | **Scheduler pings** | Posts script output to your Discord channel and @you |

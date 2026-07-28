@@ -41,6 +41,8 @@ const sandboxScriptSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true, index: true },
   code: { type: String, required: true },
   scheduled: { type: Boolean, default: false, index: true },
+  /** When true, keep intervalMs but do not run ticks until resumed. */
+  paused: { type: Boolean, default: false, index: true },
   intervalMs: { type: Number, default: null },
   runCount: { type: Number, default: 0 },
   failCount: { type: Number, default: 0 },
@@ -92,6 +94,11 @@ const userSchema = new mongoose.Schema({
     fitbitUserId: { type: String, default: '' },
     fitbitTokenExpiresAt: { type: Date, default: null },
     fitbitConnectedAt: { type: Date, default: null },
+    /**
+     * Remote automation library pack root (catalog.json + scripts/).
+     * Example: https://raw.githubusercontent.com/<org>/<repo>/<branch>
+     */
+    automationLibraryUrl: { type: String, default: '', trim: true },
     /**
      * User-configured MCP servers (stdio / HTTP / SSE).
      * Secrets live in env/headers — never return raw values via publicUser.

@@ -12,7 +12,6 @@ const BUILTIN_FILES = [
   'recruiter.js',
   'summarize.js',
   'calculator.js',
-  'selfbuild.js',
 ];
 
 /**

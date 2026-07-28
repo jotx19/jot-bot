@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import {
   KeyRound,
+  Library,
   Monitor,
   Moon,
   Plug,
@@ -77,6 +78,12 @@ const tabs: {
     label: "MCP",
     group: "Settings",
     icon: <Plug className="size-4" />,
+  },
+  {
+    id: "automation",
+    label: "Automation",
+    group: "Settings",
+    icon: <Library className="size-4" />,
   },
   {
     id: "appearance",
@@ -157,6 +164,7 @@ export function SettingsDialog() {
   const [keySet, setKeySet] = useState(false);
   const [keyHint, setKeyHint] = useState("");
   const [chatRetentionDays, setChatRetentionDays] = useState<7 | 11 | 15>(7);
+  const [automationLibraryUrl, setAutomationLibraryUrl] = useState("");
 
   useEffect(() => setMounted(true), []);
 
@@ -179,6 +187,7 @@ export function SettingsDialog() {
     setOpenrouterApiKey("");
     const days = Number(s.chatRetentionDays);
     setChatRetentionDays(days === 11 || days === 15 ? days : 7);
+    setAutomationLibraryUrl(s.automationLibraryUrl || "");
   }, [data]);
 
   const save = useMutation({
@@ -192,6 +201,9 @@ export function SettingsDialog() {
       qc.invalidateQueries({ queryKey: ["auth-me"] });
       if (variables.chatRetentionDays !== undefined) {
         qc.invalidateQueries({ queryKey: ["sessions"] });
+      }
+      if (variables.automationLibraryUrl !== undefined) {
+        qc.invalidateQueries({ queryKey: ["sandbox-library"] });
       }
       setOpenrouterApiKey("");
     },
@@ -406,6 +418,56 @@ export function SettingsDialog() {
                   onClick={() =>
                     save.mutate({ botName, botPersona, chatRetentionDays })
                   }
+                >
+                  {save.isPending ? "Saving…" : "Save changes"}
+                </Button>
+              </div>
+            ) : tab === "automation" ? (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-lg font-semibold tracking-tight">
+                    Automation
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Connect a remote script pack for the Automation page
+                    library.
+                  </p>
+                </div>
+
+                <div className="space-y-4 border-t border-white/10 pt-5">
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="automationLibraryUrl"
+                      className="text-xs sm:text-sm"
+                    >
+                      Library repo URL
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Pack root with{" "}
+                      <span className="font-mono">catalog.json</span> and a{" "}
+                      <span className="font-mono">scripts/</span> folder. The
+                      Script library stays empty until this URL is set and
+                      connected. Example:{" "}
+                      <span className="font-mono break-all">
+                        https://raw.githubusercontent.com/you/repo/main
+                      </span>
+                    </p>
+                    <Input
+                      id="automationLibraryUrl"
+                      value={automationLibraryUrl}
+                      onChange={(e) => setAutomationLibraryUrl(e.target.value)}
+                      placeholder="https://raw.githubusercontent.com/…/main"
+                      className="h-9 rounded-lg bg-white/5 font-mono text-sm"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 w-full rounded-lg sm:w-auto"
+                  disabled={save.isPending}
+                  onClick={() => save.mutate({ automationLibraryUrl })}
                 >
                   {save.isPending ? "Saving…" : "Save changes"}
                 </Button>

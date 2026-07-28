@@ -290,6 +290,7 @@ export function publicUser(doc) {
       chatRetentionDays: [7, 11, 15].includes(Number(doc.settings?.chatRetentionDays))
         ? Number(doc.settings.chatRetentionDays)
         : 7,
+      automationLibraryUrl: doc.settings?.automationLibraryUrl || '',
       mcpServers: publicMcpServers(doc.settings?.mcpServers),
       googleHealth: googleHealthOAuthPublicStatus(doc),
     },

@@ -31,10 +31,21 @@ import {
 } from './google-health.js';
 import {
   cancel as cancelScheduled,
+  pause as pauseScheduled,
+  pauseStored as pauseStoredScheduled,
+  resume as resumeScheduled,
+  setScriptInterval,
+  formatInterval,
   formatScheduledReply,
   isScheduledListRequest,
   isScheduledCancelRequest,
   extractScheduledTaskName,
+  isScheduledPauseRequest,
+  isScheduledResumeRequest,
+  extractPauseResumeScriptName,
+  isScriptIntervalChangeRequest,
+  parseIntervalMsFromMessage,
+  extractIntervalChangeScriptName,
 } from '../tools/sandbox/scheduler.js';
 import {
   listScripts,
@@ -57,8 +68,9 @@ const CLASSIFY_SYSTEM = `Classify the user message into exactly one intent:
 CHAT   - casual conversation, opinions, general knowledge the model already knows
 RECALL - asking about past conversation or memory
 LEARN  - wants the bot to remember something
-TASK   - wants a specific tool action (calculate, summarize URL, build script,
-         list/read files or folders via MCP, create/update Notion pages via MCP,
+TASK   - wants a specific tool action (calculate, summarize URL,
+         list/pause/resume/change-interval sandbox scripts, list/read files or folders via MCP,
+         create/update Notion pages via MCP,
          call any connected MCP integration)
 SEARCH - needs REAL-TIME or CURRENT information including:
          weather, news, prices, sports scores,
@@ -103,7 +115,7 @@ function ruleBasedIntent(message) {
     return 'TASK';
   }
 
-  if (isSelfbuildRequest(message)) {
+  if (isSandboxCreateRequest(message)) {
     return 'TASK';
   }
 
@@ -121,40 +133,36 @@ function ruleBasedIntent(message) {
 }
 
 /**
- * Build/run/schedule sandbox scripts via selfbuild.
+ * User asked chat to invent/write a sandbox script — redirect to Automation Library.
  */
-function isSelfbuildRequest(message) {
+function isSandboxCreateRequest(message) {
   const m = message.toLowerCase();
   if (hasEnabledMcpServers() && isLikelyMcpTaskRequest(message)) return false;
+  if (isScriptIntervalChangeRequest(message)) return false;
   if (/\bnotion\b/.test(m) && !/\b(script|tool|sandbox)\b/.test(m)) return false;
-  if (/\b(build|create|write|make)\b/.test(m) && /\b(tool|script)\b/.test(m)) return true;
-  if (/\bcalled\s+[a-z0-9_]+/i.test(message) && /\b(run|execute|test|try|schedule|save)\b/.test(m)) {
+  if (/\b(build|create|write|make)\b/.test(m) && /\b(tool|script)\b/.test(m)) {
+    // "make X run every …" is an interval change, not create
+    if (/\brun\s+every\b/.test(m) && extractIntervalChangeScriptName(message)) {
+      return false;
+    }
     return true;
   }
   if (/\b(save|store)\b/.test(m) && /\bsandbox\b/.test(m)) return true;
   if (/\bevery\s+\d+\s*(ms|second|minute|hour)/i.test(message) && /\b(run|script|schedule)\b/.test(m)) {
+    if (isScriptIntervalChangeRequest(message) || extractIntervalChangeScriptName(message)) {
+      return false;
+    }
     return true;
   }
   return false;
 }
 
-function formatSelfbuildResult(result) {
-  if (!result || typeof result !== 'object') return String(result ?? 'Done.');
-  const parts = [];
-  if (result.message) parts.push(result.message);
-  if (result.persisted) parts.push('_Stored in MongoDB (survives Render restarts)._');
-  else if (result.scriptPath && !result.message?.includes('ran once')) {
-    parts.push(`Script path:\n\`${result.scriptPath}\``);
-  }
-  if (result.stdout?.trim()) parts.push(`**Output:**\n\n${result.stdout.trim()}`);
-  if (result.stderr?.trim() && (result.error || result.sandbox?.exitCode !== 0)) {
-    parts.push(`Stderr:\n${result.stderr.trim()}`);
-  }
-  if (result.timeout) parts.push(result.timeout);
-  if (result.scheduled?.length) {
-    parts.push(`Active schedules: ${result.scheduled.map((s) => s.name).join(', ')}`);
-  }
-  return parts.length ? parts.join('\n\n') : JSON.stringify(result, null, 2);
+const LIBRARY_REDIRECT_REPLY =
+  'Sandbox scripts are no longer written from chat (that produced broken code). Open **Automation**, install a vetted script from the script library, then say **list my scripts**, **pause name**, **resume name**, or **set name every 5 minutes**.';
+
+async function handleSandboxCreateRedirect(_message, _history, options = {}) {
+  if (options.onToken) options.onToken(LIBRARY_REDIRECT_REPLY);
+  return { intent: 'TASK', reply: LIBRARY_REDIRECT_REPLY, toolUsed: 'sandbox' };
 }
 
 /**
@@ -382,7 +390,7 @@ async function pickTool(message, options = {}) {
 For Notion: use post-search to find pages, post-page to create pages, retrieve-page-markdown to read.
 Reply with ONLY valid JSON, no markdown: {"tool":"mcp__server__tool_name","input":{...}} or {"tool":"...","input":"..."}`
     : mcpTools.length
-      ? 'MCP tools are named mcp__<server>__<tool> — use them for filesystem requests and connected integrations (e.g. Notion create/update page). Prefer MCP over selfbuild for integrations.'
+      ? 'MCP tools are named mcp__<server>__<tool> — use them for filesystem requests and connected integrations (e.g. Notion create/update page). Prefer MCP over inventing sandbox scripts.'
       : 'No MCP tools are connected. Do NOT invent mcp__ tool names.';
 
   let raw;
@@ -598,16 +606,6 @@ Summarize this result clearly for the user.`,
 }
 
 /**
- * Generate, save, and optionally run sandbox scripts (selfbuild).
- */
-async function handleSelfbuild(message, history, options = {}) {
-  const { result } = await executeTool('selfbuild', message);
-  const reply = formatSelfbuildResult(result);
-  if (options.onToken) options.onToken(reply);
-  return { intent: 'TASK', reply, toolUsed: 'selfbuild', toolResult: result };
-}
-
-/**
  * List scripts saved in MongoDB.
  */
 async function handleScriptList(_message, _history, options = {}) {
@@ -639,7 +637,7 @@ async function handleScriptDelete(name, _message, _history, options = {}) {
 async function handleRunSandboxScript(name, _message, _history, options = {}) {
   const doc = await getScript(name);
   if (!doc?.code) {
-    const reply = `No sandbox script named **${name}**. Build it first with "build a script called ${name} … save in sandbox".`;
+    const reply = `No sandbox script named **${name}**. Install one from **Automation → Script library**.`;
     if (options.onToken) options.onToken(reply);
     return { intent: 'TASK', reply, toolUsed: 'sandbox' };
   }
@@ -679,13 +677,78 @@ async function handleScheduledCancel(name, message, history, options = {}) {
   return { intent: 'TASK', reply, toolUsed: 'scheduler', cancelled: ok, taskName: name };
 }
 
+async function handleScheduledPause(name, _message, _history, options = {}) {
+  let ok = pauseScheduled(name);
+  if (!ok) {
+    const doc = await getScript(name);
+    if (doc?.paused) {
+      const reply = `**${name}** is already paused.`;
+      if (options.onToken) options.onToken(reply);
+      return { intent: 'TASK', reply, toolUsed: 'scheduler', paused: true, taskName: name };
+    }
+    if (doc?.code && doc.intervalMs > 0) {
+      const scriptPath = materializeOnDisk(name, doc.code);
+      ok = pauseStoredScheduled(name, scriptPath, doc.intervalMs);
+    }
+  }
+  const reply = ok
+    ? `Paused **${name}**. Say **resume ${name}** or use Automation to start it again.`
+    : `No running schedule named **${name}**. List with "show scheduled tasks".`;
+  if (options.onToken) options.onToken(reply);
+  return { intent: 'TASK', reply, toolUsed: 'scheduler', paused: ok, taskName: name };
+}
+
+async function handleScheduledResume(name, _message, _history, options = {}) {
+  const ok = await resumeScheduled(name);
+  const reply = ok
+    ? `Resumed **${name}**.`
+    : `Could not resume **${name}**. Install/schedule it from **Automation → Script library**, or pause it first.`;
+  if (options.onToken) options.onToken(reply);
+  return { intent: 'TASK', reply, toolUsed: 'scheduler', resumed: ok, taskName: name };
+}
+
+async function handleScriptIntervalChange(message, _history, options = {}) {
+  const name = extractIntervalChangeScriptName(message);
+  const intervalMs = parseIntervalMsFromMessage(message);
+  if (!name || !intervalMs) {
+    const reply =
+      'Say something like **set health_discord_digest every 5 minutes** or **change interval of discord_heartbeat to every 1 hour**.';
+    if (options.onToken) options.onToken(reply);
+    return { intent: 'TASK', reply, toolUsed: 'scheduler' };
+  }
+
+  const result = await setScriptInterval(name, intervalMs);
+  let reply;
+  if (!result.ok) {
+    if (result.error === 'not_found') {
+      reply = `No sandbox script named **${name}**. Install one from **Automation → Script library**.`;
+    } else {
+      reply = result.message || `Could not update interval for **${name}**.`;
+    }
+  } else {
+    const every = formatInterval(result.intervalMs);
+    reply = result.paused
+      ? `Updated **${name}** to every ${every} (still paused). Say **resume ${name}** to run it.`
+      : `Updated **${name}** to every ${every}. Schedule + script meta are synced.`;
+  }
+  if (options.onToken) options.onToken(reply);
+  return {
+    intent: 'TASK',
+    reply,
+    toolUsed: 'scheduler',
+    intervalChanged: Boolean(result.ok),
+    taskName: name,
+    intervalMs: result.intervalMs || null,
+  };
+}
+
 /**
  * TASK — Qwen picks a tool from registry and executes it.
  */
 async function handleTask(message, history, options = {}) {
   try {
-    if (isSelfbuildRequest(message) && !isLikelyMcpTaskRequest(message)) {
-      return handleSelfbuild(message, history, options);
+    if (isSandboxCreateRequest(message) && !isLikelyMcpTaskRequest(message)) {
+      return handleSandboxCreateRedirect(message, history, options);
     }
 
     if (isRecruiterEmailRequest(message)) {
@@ -915,7 +978,7 @@ function normalizePreferTool(raw) {
     .replace(/^[/]/, '');
   if (t === 'websearch' || t === 'web' || t === 'search') return 'websearch';
   if (t === 'notion') return 'notion';
-  if (t === 'sandbox' || t === 'selfbuild') return 'sandbox';
+  if (t === 'sandbox') return 'sandbox';
   if (t === 'health' || t === 'fitbit' || t === 'fitness') return 'health';
   return null;
 }
@@ -943,7 +1006,7 @@ export async function routeMessage(message, history = [], options = {}) {
   }
   if (preferTool === 'sandbox') {
     console.log(`[intent] PREFER sandbox — session ${options.sessionId || 'none'}`);
-    return handleSelfbuild(message, history, options);
+    return handleScriptList(message, history, options);
   }
   if (preferTool === 'notion') {
     console.log(`[intent] PREFER notion — session ${options.sessionId || 'none'}`);
@@ -994,6 +1057,27 @@ export async function routeMessage(message, history = [], options = {}) {
     return handleScheduledList(message, history, options);
   }
 
+  if (isScheduledPauseRequest(message)) {
+    const taskName = extractPauseResumeScriptName(message);
+    if (taskName) {
+      console.log(`[intent] SCHEDULED_PAUSE ${taskName} — session ${options.sessionId || 'none'}`);
+      return handleScheduledPause(taskName, message, history, options);
+    }
+  }
+
+  if (isScheduledResumeRequest(message)) {
+    const taskName = extractPauseResumeScriptName(message);
+    if (taskName) {
+      console.log(`[intent] SCHEDULED_RESUME ${taskName} — session ${options.sessionId || 'none'}`);
+      return handleScheduledResume(taskName, message, history, options);
+    }
+  }
+
+  if (isScriptIntervalChangeRequest(message)) {
+    console.log(`[intent] SCRIPT_INTERVAL — session ${options.sessionId || 'none'}`);
+    return handleScriptIntervalChange(message, history, options);
+  }
+
   if (isScheduledCancelRequest(message)) {
     const taskName = extractScheduledTaskName(message);
     if (taskName) {
@@ -1002,9 +1086,9 @@ export async function routeMessage(message, history = [], options = {}) {
     }
   }
 
-  if (isSelfbuildRequest(message)) {
-    console.log(`[intent] SELFBUILD — session ${options.sessionId || 'none'}`);
-    return handleSelfbuild(message, history, options);
+  if (isSandboxCreateRequest(message)) {
+    console.log(`[intent] SANDBOX_CREATE_REDIRECT — session ${options.sessionId || 'none'}`);
+    return handleSandboxCreateRedirect(message, history, options);
   }
 
   const intent = await classifyIntent(message);

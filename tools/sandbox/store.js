@@ -186,6 +186,7 @@ export async function saveScript({ name, code, scheduled = false, intervalMs = n
       $set: {
         code,
         scheduled: Boolean(scheduled),
+        paused: false,
         intervalMs: scheduled && intervalMs ? intervalMs : null,
         updatedAt: new Date(),
       },
@@ -202,7 +203,14 @@ export async function markScheduled(name, intervalMs) {
   if (!isMongoReady()) return;
   await SandboxScript.findOneAndUpdate(
     { name },
-    { $set: { scheduled: true, intervalMs, updatedAt: new Date() } }
+    {
+      $set: {
+        scheduled: true,
+        paused: false,
+        intervalMs,
+        updatedAt: new Date(),
+      },
+    }
   );
 }
 
@@ -210,9 +218,62 @@ export async function markUnscheduled(name) {
   if (!isMongoReady()) return;
   await SandboxScript.findOneAndUpdate(
     { name },
-    { $set: { scheduled: false, intervalMs: null, updatedAt: new Date() } }
+    {
+      $set: {
+        scheduled: false,
+        paused: false,
+        intervalMs: null,
+        updatedAt: new Date(),
+      },
+    }
   );
   await pruneOverflow();
+}
+
+export async function markPaused(name) {
+  if (!isMongoReady()) return;
+  await SandboxScript.findOneAndUpdate(
+    { name },
+    { $set: { paused: true, scheduled: true, updatedAt: new Date() } }
+  );
+}
+
+export async function markResumed(name) {
+  if (!isMongoReady()) return;
+  await SandboxScript.findOneAndUpdate(
+    { name },
+    { $set: { paused: false, scheduled: true, updatedAt: new Date() } }
+  );
+}
+
+/**
+ * Persist a new schedule interval and updated script source (meta banner).
+ */
+export async function updateScriptInterval(name, intervalMs, code) {
+  if (!isMongoReady()) {
+    return { ok: false, error: 'mongodb_unavailable' };
+  }
+  if (!name || !intervalMs || intervalMs <= 0) {
+    return { ok: false, error: 'invalid_interval' };
+  }
+  const bytes = Buffer.byteLength(code, 'utf8');
+  if (bytes > MAX_CODE_BYTES) {
+    return { ok: false, error: 'script_too_large' };
+  }
+  const doc = await SandboxScript.findOneAndUpdate(
+    { name },
+    {
+      $set: {
+        code,
+        intervalMs,
+        scheduled: true,
+        updatedAt: new Date(),
+      },
+    },
+    { new: true }
+  ).lean();
+  if (!doc) return { ok: false, error: 'not_found' };
+  return { ok: true, doc };
 }
 
 export async function deleteScript(name) {
@@ -273,7 +334,21 @@ export async function recordScriptRun(name, meta = {}) {
 
 export async function listScheduledRecords() {
   if (!isMongoReady()) return [];
-  return SandboxScript.find({ scheduled: true, intervalMs: { $gt: 0 } }).lean();
+  return SandboxScript.find({
+    scheduled: true,
+    paused: { $ne: true },
+    intervalMs: { $gt: 0 },
+  }).lean();
+}
+
+/** Scripts that are paused (interval kept, timer stopped). */
+export async function listPausedRecords() {
+  if (!isMongoReady()) return [];
+  return SandboxScript.find({
+    scheduled: true,
+    paused: true,
+    intervalMs: { $gt: 0 },
+  }).lean();
 }
 
 async function pruneOverflow() {
@@ -295,23 +370,39 @@ async function pruneOverflow() {
 
 export function formatScriptsReply(scripts) {
   if (!scripts.length) {
-    return 'No saved sandbox scripts. Schedule one with "…every 5 minutes" to keep it across restarts.';
+    return 'No sandbox scripts yet. Open **Automation** and install a vetted script from the script library.';
   }
   const lines = scripts.map((s, i) => {
-    const sched = s.scheduled && s.intervalMs ? 'scheduled' : 'saved';
+    const status = s.paused
+      ? 'paused'
+      : s.scheduled && s.intervalMs
+        ? 'scheduled'
+        : 'saved';
+    const every =
+      s.intervalMs > 0
+        ? `, every ${
+            s.intervalMs >= 3600000 && s.intervalMs % 3600000 === 0
+              ? `${s.intervalMs / 3600000}h`
+              : s.intervalMs >= 60000 && s.intervalMs % 60000 === 0
+                ? `${s.intervalMs / 60000}m`
+                : s.intervalMs >= 1000 && s.intervalMs % 1000 === 0
+                  ? `${s.intervalMs / 1000}s`
+                  : `${s.intervalMs}ms`
+          }`
+        : '';
     const kb = (Buffer.byteLength(s.code, 'utf8') / 1024).toFixed(1);
-    return `${i + 1}. **${s.name}** (${sched}, ${kb} KB, updated ${s.updatedAt?.toISOString?.() ?? s.updatedAt})`;
+    return `${i + 1}. **${s.name}** (${status}${every}, ${kb} KB)`;
   });
-  return `Saved scripts (${scripts.length}/${MAX_SCRIPTS} max, scheduled jobs kept):\n\n${lines.join('\n')}`;
+  return `Sandbox scripts (${scripts.length}/${MAX_SCRIPTS}):\n\n${lines.join('\n')}\n\nSay **pause name** / **resume name** / **set name every 5 minutes**, or manage them in Automation.`;
 }
 
 export function isScriptListRequest(message) {
   const m = message.toLowerCase();
-  return (
-    /\b(list|show)\b/.test(m) &&
-    /\b(saved|my)\b/.test(m) &&
-    /\b(script|scripts)\b/.test(m)
-  );
+  if (/\b(list|show)\b/.test(m) && /\b(script|scripts)\b/.test(m)) return true;
+  if (/\b(my|saved)\b/.test(m) && /\b(script|scripts)\b/.test(m) && /\b(list|show|what)\b/.test(m)) {
+    return true;
+  }
+  return false;
 }
 
 export function isScriptDeleteRequest(message) {

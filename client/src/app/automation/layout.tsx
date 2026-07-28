@@ -3,7 +3,7 @@ import { createPageMetadata } from "@/lib/seo";
 export const metadata = createPageMetadata({
   title: "Automation",
   description:
-    "Manage sandbox automation scripts saved from chat — schedule, run, and review your AI tools.",
+    "Install vetted sandbox scripts from the script library — schedule, pause, and review runs.",
   path: "/automation",
   index: false,
 });

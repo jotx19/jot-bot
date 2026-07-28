@@ -1,5 +1,4 @@
 const BUILTIN: Record<string, string> = {
-  selfbuild: "Build",
   sandbox: "Sandbox",
   scheduler: "Scheduler",
   websearch: "Web search",

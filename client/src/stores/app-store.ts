@@ -52,6 +52,7 @@ export type SettingsTab =
   | "discord"
   | "byok"
   | "mcp"
+  | "automation"
   | "appearance";
 
 type ChatUiState = {

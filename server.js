@@ -15,9 +15,16 @@ import {
   sweepAllExpiredSessions,
 } from './core/memory.js';
 import { loadTools, listTools } from './tools/registry.js';
-import { listScheduled, cancel, restoreScheduled } from './tools/sandbox/scheduler.js';
+import { listScheduled, cancel, pause, pauseStored, resume, restoreScheduled, schedule, setScriptInterval, formatInterval } from './tools/sandbox/scheduler.js';
 import { isNotifyConfigured } from './tools/sandbox/notify.js';
-import { listScripts, deleteScript, getScript } from './tools/sandbox/store.js';
+import { listScripts, deleteScript, getScript, materializeOnDisk, saveScript } from './tools/sandbox/store.js';
+import {
+  listLibraryScripts,
+  getLibraryScript,
+  applyAutomationMeta,
+  normalizeLibraryUrl,
+  clearLibraryCache,
+} from './tools/sandbox/library.js';
 import { runChatTurn } from './core/runtime.js';
 import { normalizeDiscordId, getDiscordInviteUrl } from './core/users.js';
 import { runWithLlmCredentials, credsFromUserDoc } from './core/llm-context.js';
@@ -367,6 +374,17 @@ app.put('/api/settings', async (req, res) => {
         body.chatRetentionDays
       );
     }
+    if (body.automationLibraryUrl !== undefined) {
+      const nextUrl = normalizeLibraryUrl(body.automationLibraryUrl) || '';
+      if (String(body.automationLibraryUrl || '').trim() && !nextUrl) {
+        return res.status(400).json({
+          error:
+            'automationLibraryUrl must be an http(s) URL to a pack root (catalog.json)',
+        });
+      }
+      $set['settings.automationLibraryUrl'] = nextUrl;
+      clearLibraryCache(nextUrl || undefined);
+    }
     if (body.clearOpenrouterApiKey === true) {
       $set['settings.openrouterApiKey'] = '';
     } else if (
@@ -545,6 +563,120 @@ app.get('/api/sandbox/scheduled', (_req, res) => {
   res.json({ scheduled: listScheduled() });
 });
 
+async function libraryUrlForRequest(req) {
+  const user = await loadRequestUser(req);
+  return normalizeLibraryUrl(user?.settings?.automationLibraryUrl) || null;
+}
+
+app.get('/api/sandbox/library', async (req, res) => {
+  try {
+    const libraryUrl = await libraryUrlForRequest(req);
+    const result = await listLibraryScripts({ libraryUrl });
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/sandbox/library/:id', async (req, res) => {
+  try {
+    const libraryUrl = await libraryUrlForRequest(req);
+    const item = await getLibraryScript(req.params.id, { libraryUrl });
+    if (!item?.code) return res.status(404).json({ error: 'Library script not found' });
+    return res.json({
+      script: {
+        id: item.id,
+        name: item.name,
+        title: item.title,
+        description: item.description,
+        category: item.category,
+        defaultIntervalMs: item.defaultIntervalMs,
+        requires: item.requires,
+        file: item.file,
+        code: item.code,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/sandbox/library/:id/install', async (req, res) => {
+  try {
+    const libraryUrl = await libraryUrlForRequest(req);
+    const item = await getLibraryScript(req.params.id, { libraryUrl });
+    if (!item?.code) return res.status(404).json({ error: 'Library script not found' });
+
+    const scheduleOnInstall = Boolean(req.body?.schedule);
+    const intervalMsRaw = Number(req.body?.intervalMs);
+    const intervalMs =
+      Number.isFinite(intervalMsRaw) && intervalMsRaw > 0
+        ? intervalMsRaw
+        : item.defaultIntervalMs;
+
+    const requestedName = String(req.body?.name || item.name)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')
+      .slice(0, 64);
+    const scriptName = requestedName || item.name;
+
+    if (scheduleOnInstall && (!intervalMs || intervalMs <= 0)) {
+      return res.status(400).json({ error: 'intervalMs required to schedule' });
+    }
+
+    // Stop tickers under library name and custom name before overwrite.
+    cancel(item.name, { persist: false });
+    if (scriptName !== item.name) cancel(scriptName, { persist: false });
+
+    const code = applyAutomationMeta(item.code, {
+      libraryId: item.id,
+      name: scriptName,
+      intervalMs: scheduleOnInstall ? intervalMs : null,
+    });
+
+    const scriptPath = materializeOnDisk(scriptName, code);
+    const saved = await saveScript({
+      name: scriptName,
+      code,
+      scheduled: scheduleOnInstall,
+      intervalMs: scheduleOnInstall ? intervalMs : null,
+    });
+
+    if (scheduleOnInstall) {
+      schedule(scriptName, scriptPath, intervalMs);
+    }
+
+    return res.json({
+      installed: true,
+      name: scriptName,
+      libraryId: item.id,
+      scheduled: scheduleOnInstall,
+      intervalMs: scheduleOnInstall ? intervalMs : null,
+      persisted: saved.persisted,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/sandbox/library/refresh', async (req, res) => {
+  try {
+    const libraryUrl = await libraryUrlForRequest(req);
+    clearLibraryCache(libraryUrl);
+    const result = await listLibraryScripts({ libraryUrl, force: true });
+    return res.json({
+      refreshed: true,
+      source: result.source,
+      connected: result.connected,
+      remoteError: result.remoteError,
+      count: result.scripts.length,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/sandbox/scripts', async (_req, res) => {
   try {
     if (!isMongoReady()) {
@@ -554,6 +686,7 @@ app.get('/api/sandbox/scripts', async (_req, res) => {
         stats: {
           scripts: 0,
           scheduled: 0,
+          paused: 0,
           totalRuns: 0,
           totalFails: 0,
           lastRunAt: null,
@@ -564,6 +697,7 @@ app.get('/api/sandbox/scripts', async (_req, res) => {
     const scripts = docs.map((s) => ({
       name: s.name,
       scheduled: Boolean(s.scheduled),
+      paused: Boolean(s.paused),
       intervalMs: s.intervalMs || null,
       code: s.code || '',
       bytes: Buffer.byteLength(s.code || '', 'utf8'),
@@ -577,7 +711,8 @@ app.get('/api/sandbox/scripts', async (_req, res) => {
 
     const totalRuns = scripts.reduce((sum, s) => sum + s.runCount, 0);
     const totalFails = scripts.reduce((sum, s) => sum + s.failCount, 0);
-    const scheduledCount = scripts.filter((s) => s.scheduled).length;
+    const scheduledCount = scripts.filter((s) => s.scheduled && !s.paused).length;
+    const pausedCount = scripts.filter((s) => s.paused).length;
     const lastRunAt = scripts
       .map((s) => (s.lastRunAt ? new Date(s.lastRunAt).getTime() : 0))
       .reduce((a, b) => Math.max(a, b), 0);
@@ -588,6 +723,7 @@ app.get('/api/sandbox/scripts', async (_req, res) => {
       stats: {
         scripts: scripts.length,
         scheduled: scheduledCount,
+        paused: pausedCount,
         totalRuns,
         totalFails,
         lastRunAt: lastRunAt ? new Date(lastRunAt).toISOString() : null,
@@ -620,9 +756,69 @@ app.get('/api/sandbox/scripts/:name', async (req, res) => {
 
 app.delete('/api/sandbox/scripts/:name', async (req, res) => {
   try {
+    cancel(req.params.name);
     const result = await deleteScript(req.params.name);
     if (!result.ok) return res.status(404).json({ error: 'Script not found' });
     return res.json({ deleted: true, stateRemoved: result.stateRemoved || [] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/sandbox/scripts/:name/pause', async (req, res) => {
+  try {
+    const name = req.params.name;
+    if (pause(name)) return res.json({ paused: true, name });
+
+    const doc = await getScript(name);
+    if (!doc?.code || !doc.intervalMs || doc.intervalMs <= 0) {
+      return res.status(404).json({ error: 'No schedule for this script' });
+    }
+    if (doc.paused) return res.json({ paused: true, name });
+
+    const scriptPath = materializeOnDisk(name, doc.code);
+    pauseStored(name, scriptPath, doc.intervalMs);
+    return res.json({ paused: true, name });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/sandbox/scripts/:name/resume', async (req, res) => {
+  try {
+    const name = req.params.name;
+    const ok = await resume(name);
+    if (!ok) {
+      return res.status(404).json({ error: 'No paused schedule for this script' });
+    }
+    return res.json({ resumed: true, name });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/sandbox/scripts/:name/interval', async (req, res) => {
+  try {
+    const name = String(req.params.name || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_');
+    const intervalMs = Number(req.body?.intervalMs);
+    const result = await setScriptInterval(name, intervalMs);
+    if (!result.ok) {
+      const status = result.error === 'not_found' ? 404 : 400;
+      return res.status(status).json({
+        error: result.message || result.error || 'Failed to update interval',
+      });
+    }
+    return res.json({
+      ok: true,
+      name: result.name,
+      intervalMs: result.intervalMs,
+      paused: result.paused,
+      scheduled: result.scheduled,
+      label: formatInterval(result.intervalMs),
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
