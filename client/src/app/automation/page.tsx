@@ -593,58 +593,60 @@ export default function AutomationPage() {
             <p className="shrink-0 text-sm font-medium tracking-tight uppercase">
               Library
             </p>
-            <div className="relative z-10 min-w-0 flex-1 sm:max-w-[16rem]">
-              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                id="library-search"
-                type="search"
-                value={librarySearch}
-                onChange={(e) => setLibrarySearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.preventDefault();
-                }}
-                placeholder="Search"
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-                className="h-8 w-full rounded-lg border border-border/60 bg-transparent pr-2.5 pl-8 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-border"
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              aria-label={
-                connectLibrary.isPending
-                  ? "Connecting"
-                  : libraryConnected
-                    ? "Connected — reconnect library"
-                    : "Connect library"
-              }
-              title={
-                libraryConnected
-                  ? "Connected"
-                  : connectLibrary.isPending
-                    ? "Connecting…"
-                    : "Connect"
-              }
-              className={cn(
-                "size-8 shrink-0 rounded-lg p-0 sm:h-8 sm:w-auto sm:px-3 sm:text-xs",
-                libraryConnected &&
-                  "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 hover:text-emerald-300"
-              )}
-              disabled={connectLibrary.isPending}
-              onClick={handleConnect}
-            >
-              <LinkIcon className="size-3.5" />
-              <span className="hidden sm:inline">
-                {connectLibrary.isPending
-                  ? "Connecting…"
-                  : libraryConnected
+            <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none sm:gap-2.5">
+              <div className="relative z-10 min-w-0 flex-1 sm:w-64 sm:flex-none sm:max-w-[16rem]">
+                <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  id="library-search"
+                  type="search"
+                  value={librarySearch}
+                  onChange={(e) => setLibrarySearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                  placeholder="Search"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="h-8 w-full rounded-lg border border-border/60 bg-transparent pr-2.5 pl-8 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-border"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label={
+                  connectLibrary.isPending
+                    ? "Connecting"
+                    : libraryConnected
+                      ? "Connected — reconnect library"
+                      : "Connect library"
+                }
+                title={
+                  libraryConnected
                     ? "Connected"
-                    : "Connect"}
-              </span>
-            </Button>
+                    : connectLibrary.isPending
+                      ? "Connecting…"
+                      : "Connect"
+                }
+                className={cn(
+                  "size-8 shrink-0 rounded-lg p-0 sm:h-8 sm:w-auto sm:px-3 sm:text-xs",
+                  libraryConnected &&
+                    "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 hover:text-emerald-300"
+                )}
+                disabled={connectLibrary.isPending}
+                onClick={handleConnect}
+              >
+                <LinkIcon className="size-3.5" />
+                <span className="hidden sm:inline">
+                  {connectLibrary.isPending
+                    ? "Connecting…"
+                    : libraryConnected
+                      ? "Connected"
+                      : "Connect"}
+                </span>
+              </Button>
+            </div>
           </div>
           {libraryQuery.data?.remoteError ? (
             <p className="mt-1.5 text-xs text-amber-500">
