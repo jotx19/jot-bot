@@ -24,6 +24,14 @@ export function SiteFooter() {
               <ul className="mt-2.5 space-y-1.5 text-xs text-white/85">
                 <li>
                   <Link
+                    href="/about"
+                    className="transition-colors hover:text-white"
+                  >
+                    About
+                  </Link>
+                </li>
+                <li>
+                  <Link
                     href="/contact"
                     className="transition-colors hover:text-white"
                   >
@@ -37,16 +45,6 @@ export function SiteFooter() {
                   >
                     Features
                   </Link>
-                </li>
-                <li>
-                  <a
-                    href="https://github.com/jotx19/jot-bot"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition-colors hover:text-white"
-                  >
-                    Contribute
-                  </a>
                 </li>
               </ul>
             </div>
