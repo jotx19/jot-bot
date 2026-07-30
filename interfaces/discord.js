@@ -190,6 +190,11 @@ async function handleDiscordMessage(message, client) {
         history,
         sessionId,
         channel: 'discord',
+        apiPublicUrl:
+          process.env.API_PUBLIC_URL ||
+          process.env.PUBLIC_API_URL ||
+          process.env.RENDER_EXTERNAL_URL ||
+          null,
       })
     )
   );

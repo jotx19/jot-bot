@@ -3,6 +3,7 @@ const BUILTIN: Record<string, string> = {
   scheduler: "Scheduler",
   websearch: "Web search",
   recruiter: "Recruiter",
+  "resume-pdf": "Resume PDF",
   "notion-append": "Notion · Update",
   "notion-create": "Notion · Create",
   "notion-delete": "Notion · Delete",

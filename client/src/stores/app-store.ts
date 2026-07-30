@@ -55,31 +55,84 @@ export type SettingsTab =
   | "automation"
   | "appearance";
 
+type PdfDoc = {
+  url: string;
+  fileName: string;
+};
+
 type ChatUiState = {
   sidebarOpen: boolean;
   settingsOpen: boolean;
   settingsTab: SettingsTab;
   activeSessionId: string | null;
+  pdfOpen: boolean;
+  pdfDoc: PdfDoc | null;
+  pdfExpanded: boolean;
+  pdfWidthPct: number;
+  /** Sidebar open state before PDF viewer opened (restored on close). */
+  sidebarBeforePdf: boolean | null;
   setSidebarOpen: (v: boolean) => void;
   setSettingsOpen: (v: boolean) => void;
   openSettings: (tab?: SettingsTab) => void;
   toggleSidebar: () => void;
   setActiveSessionId: (id: string | null) => void;
+  openPdfViewer: (doc: PdfDoc) => void;
+  closePdfViewer: () => void;
+  setPdfExpanded: (v: boolean) => void;
+  togglePdfExpanded: () => void;
+  setPdfWidthPct: (pct: number) => void;
 };
 
-export const useChatUiStore = create<ChatUiState>((set) => ({
-  sidebarOpen: true,
-  settingsOpen: false,
-  settingsTab: "general",
-  activeSessionId: null,
-  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
-  setSettingsOpen: (settingsOpen) =>
-    set((s) => ({
-      settingsOpen,
-      settingsTab: settingsOpen ? s.settingsTab : "general",
-    })),
-  openSettings: (tab = "general") =>
-    set({ settingsOpen: true, settingsTab: tab }),
-  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-  setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
-}));
+const clampWidth = (pct: number) => Math.min(72, Math.max(28, Math.round(pct)));
+
+export const useChatUiStore = create<ChatUiState>()(
+  persist(
+    (set) => ({
+      sidebarOpen: true,
+      settingsOpen: false,
+      settingsTab: "general",
+      activeSessionId: null,
+      pdfOpen: false,
+      pdfDoc: null,
+      pdfExpanded: false,
+      pdfWidthPct: 46,
+      sidebarBeforePdf: null,
+      setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+      setSettingsOpen: (settingsOpen) =>
+        set((s) => ({
+          settingsOpen,
+          settingsTab: settingsOpen ? s.settingsTab : "general",
+        })),
+      openSettings: (tab = "general") =>
+        set({ settingsOpen: true, settingsTab: tab }),
+      toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
+      openPdfViewer: (doc) =>
+        set((s) => ({
+          pdfOpen: true,
+          pdfDoc: doc,
+          pdfExpanded: false,
+          sidebarBeforePdf: s.pdfOpen ? s.sidebarBeforePdf : s.sidebarOpen,
+          sidebarOpen: false,
+        })),
+      closePdfViewer: () =>
+        set((s) => ({
+          pdfOpen: false,
+          pdfDoc: null,
+          pdfExpanded: false,
+          sidebarOpen:
+            s.sidebarBeforePdf != null ? s.sidebarBeforePdf : s.sidebarOpen,
+          sidebarBeforePdf: null,
+        })),
+      setPdfExpanded: (pdfExpanded) => set({ pdfExpanded }),
+      togglePdfExpanded: () => set((s) => ({ pdfExpanded: !s.pdfExpanded })),
+      setPdfWidthPct: (pct) => set({ pdfWidthPct: clampWidth(pct) }),
+    }),
+    {
+      name: "tinyjot-chat-ui",
+      partialize: (s) => ({
+        pdfWidthPct: s.pdfWidthPct,
+      }),
+    }
+  )
+);

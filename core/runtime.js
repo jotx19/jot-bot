@@ -22,6 +22,8 @@ import { closeMcpSessionForRequest } from './mcp.js';
  *   parentTaskId?: string | null,
  *   onToken?: (chunk: string) => void,
  *   preferTool?: string | null,
+ *   userId?: string | null,
+ *   apiPublicUrl?: string | null,
  * }} params
  */
 export async function runChatTurn(params) {
@@ -33,6 +35,8 @@ export async function runChatTurn(params) {
     parentTaskId = null,
     onToken,
     preferTool = null,
+    userId = null,
+    apiPublicUrl = null,
   } = params;
 
   const task = createTaskRecord({
@@ -51,6 +55,8 @@ export async function runChatTurn(params) {
       onToken,
       task,
       preferTool,
+      userId,
+      apiPublicUrl,
     });
 
     if (result?.toolUsed) {

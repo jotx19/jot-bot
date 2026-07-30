@@ -7,10 +7,17 @@ import { MessageSquareIcon } from "lucide-react";
 import { toast } from "sonner";
 import { api, type UiMessage } from "@/lib/api";
 import { streamChat } from "@/lib/stream-chat";
+import {
+  extractPdfFromContent,
+  guessPdfFileName,
+  resolvePdfHref,
+} from "@/lib/pdf-export";
 import { useChatUiStore } from "@/stores/app-store";
 import { ChatMessage } from "@/components/chat/chat-message";
 import { ChatMessageInput } from "@/components/chat/chat-message-input";
+import { ArtifactsButton } from "@/components/chat/artifacts-menu";
 import { EmptyChat } from "@/components/chat/empty-chat";
+import { PdfViewerPanel } from "@/components/chat/pdf-viewer-panel";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -67,10 +74,15 @@ export function ChatView() {
   const sessionId = params.sessionId;
   const qc = useQueryClient();
   const setActiveSessionId = useChatUiStore((s) => s.setActiveSessionId);
+  const openPdfViewer = useChatUiStore((s) => s.openPdfViewer);
+  const closePdfViewer = useChatUiStore((s) => s.closePdfViewer);
+  const pdfOpen = useChatUiStore((s) => s.pdfOpen);
+  const pdfExpanded = useChatUiStore((s) => s.pdfExpanded);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const splitRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   /** Only hydrate from the server once per session — never overwrite live turns. */
   const hydratedSessionRef = useRef<string | null>(null);
@@ -86,7 +98,8 @@ export function ChatView() {
     setMessages([]);
     setInput("");
     setBusy(false);
-  }, [sessionId]);
+    closePdfViewer();
+  }, [sessionId, closePdfViewer]);
 
   const { data: sessionData, isLoading } = useQuery({
     queryKey: ["session", sessionId],
@@ -210,6 +223,12 @@ export function ChatView() {
           );
         },
         onDone: (meta) => {
+          const reply = meta.reply || "";
+          const downloadUrl =
+            resolvePdfHref(meta.downloadUrl || meta.downloadPath || null) ||
+            extractPdfFromContent(reply);
+          const fileName = guessPdfFileName(meta.fileName, reply);
+
           setMessages((prev) => {
             const updated = prev.map((m) =>
               m.id === assistantId
@@ -218,6 +237,8 @@ export function ChatView() {
                     content: meta.reply || m.content,
                     intent: meta.intent || null,
                     toolUsed: meta.toolUsed ?? null,
+                    downloadUrl: downloadUrl || null,
+                    fileName: downloadUrl ? fileName : null,
                     streaming: false,
                   }
                 : m
@@ -246,6 +267,10 @@ export function ChatView() {
             return updated;
           });
           qc.invalidateQueries({ queryKey: ["sessions"] });
+
+          if (downloadUrl) {
+            openPdfViewer({ url: downloadUrl, fileName });
+          }
         },
         onError: (err) => {
           toast.error(err || "Internal server error.");
@@ -270,7 +295,7 @@ export function ChatView() {
     const raw = input.trim();
     if (!raw || busy) return;
     const slash = raw.match(
-      /^\/(websearch|notion|sandbox|health|fitbit|fitness|web|search)\b[\s:,-]*/i
+      /^\/(websearch|notion|sandbox|health|fitbit|fitness|web|search|resume|resume-pdf|cv|pdf)\b[\s:,-]*/i
     );
     let preferTool: string | null = null;
     let text = raw;
@@ -281,10 +306,15 @@ export function ChatView() {
           ? "websearch"
           : key === "fitbit" || key === "fitness"
             ? "health"
-            : key;
+            : key === "resume-pdf" || key === "cv" || key === "pdf"
+              ? "resume"
+              : key;
       text = raw.slice(slash[0].length).trim();
       if (!text) {
         if (preferTool === "health") text = "summarize today";
+        else if (preferTool === "resume")
+          text =
+            "Make a tailored resume PDF from my resume and job description in this chat.";
         else return;
       }
     }
@@ -318,155 +348,191 @@ export function ChatView() {
   };
 
   return (
-    <div className="flex min-h-svh w-full justify-center">
-      <div className="flex w-full max-w-4xl flex-col px-3 md:px-4">
-        <div className="sticky top-0 z-40 pb-2 pt-3 pl-12 pr-1 md:px-1 md:pt-4">
-          {/* Mobile: compact single bar */}
+    <div
+      ref={splitRef}
+      className={cn(
+        "flex w-full",
+        pdfOpen ? "h-svh overflow-hidden" : "min-h-svh"
+      )}
+    >
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 justify-center",
+          pdfOpen ? "h-full min-h-0 overflow-hidden" : "min-h-svh"
+        )}
+      >
+        <div
+          className={cn(
+            "flex w-full flex-col px-3 md:px-4",
+            pdfOpen ? "h-full min-h-0 max-w-3xl" : "max-w-4xl"
+          )}
+        >
           <div
             className={cn(
-              "mt-1 flex h-10 w-full min-w-0 items-center gap-1.5 rounded-2xl md:hidden",
-              "border border-white/10 bg-black/40 px-2",
-              "shadow-sm backdrop-blur-xl supports-backdrop-filter:bg-black/30"
+              "z-40 shrink-0 pb-2 pl-12 pr-1 pt-3 md:px-1 md:pt-4",
+              !pdfOpen && "sticky top-0"
             )}
           >
-            <div className="flex min-w-0 flex-1 items-center gap-1.5">
-              <div className="inline-flex shrink-0 items-center gap-1.5 px-1">
-                <MessageSquareIcon className="size-3.5 shrink-0 text-foreground/80" />
-                <span className="text-xs font-semibold tracking-tight text-foreground">
-                  Chat
-                </span>
-              </div>
-              <span aria-hidden className="h-3.5 w-px shrink-0 bg-white/20" />
-              <span className="min-w-0 truncate px-1 text-[11px] text-muted-foreground">
-                Live
-              </span>
-            </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className={cn(
-                    "inline-flex h-7 shrink-0 items-center rounded-lg",
-                    "border border-white/10 bg-black/50 px-2",
-                    "bg-linear-to-br from-sky-500/10 via-transparent to-transparent"
-                  )}
-                >
-                  <span className="font-mono text-[10px] tabular-nums leading-none tracking-tight text-foreground/90">
-                    {displayRemainingMs != null
-                      ? formatRemainingCompact(displayRemainingMs)
-                      : "…"}
+            {/* Mobile: compact single bar */}
+            <div
+              className={cn(
+                "mt-1 flex h-10 w-full min-w-0 items-center gap-1.5 rounded-2xl md:hidden",
+                "border border-white/10 bg-black/40 px-2",
+                "shadow-sm backdrop-blur-xl supports-backdrop-filter:bg-black/30"
+              )}
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <div className="inline-flex shrink-0 items-center gap-1.5 px-1">
+                  <MessageSquareIcon className="size-3.5 shrink-0 text-foreground/80" />
+                  <span className="text-xs font-semibold tracking-tight text-foreground">
+                    Chat
                   </span>
                 </div>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {sessionData?.expiresAt
-                  ? "Time left before this chat is auto-deleted"
-                  : `Chats are kept for ${sessionData?.retentionDays ?? 7} days`}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-
-          {/* Desktop: separate pills */}
-          <div className="hidden items-center justify-between gap-3 md:flex">
-            <div className="flex min-w-0 items-center gap-2">
-              <div
-                className={cn(
-                  "inline-flex h-9 items-center gap-2 rounded-full",
-                  "border border-white/10 bg-black/40 px-3",
-                  "shadow-sm backdrop-blur-xl supports-backdrop-filter:bg-black/30"
-                )}
-              >
-                <MessageSquareIcon className="size-3.5 shrink-0 text-foreground/80" />
-                <span className="text-xs font-semibold tracking-tight text-foreground">
-                  Chat
+                <span aria-hidden className="h-3.5 w-px shrink-0 bg-white/20" />
+                <span className="min-w-0 truncate px-1 text-[11px] text-muted-foreground">
+                  Live
                 </span>
               </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <ArtifactsButton />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={cn(
+                        "inline-flex h-7 shrink-0 items-center rounded-lg",
+                        "border border-white/10 bg-black/50 px-2",
+                        "bg-linear-to-br from-sky-500/10 via-transparent to-transparent"
+                      )}
+                    >
+                      <span className="font-mono text-[10px] tabular-nums leading-none tracking-tight text-foreground/90">
+                        {displayRemainingMs != null
+                          ? formatRemainingCompact(displayRemainingMs)
+                          : "…"}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {sessionData?.expiresAt
+                      ? "Time left before this chat is auto-deleted"
+                      : `Chats are kept for ${sessionData?.retentionDays ?? 7} days`}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
 
-              <span
-                aria-hidden
-                className="h-4 w-px shrink-0 bg-white/20"
+            {/* Desktop: separate pills */}
+            <div className="hidden items-center justify-between gap-3 md:flex">
+              <div className="flex min-w-0 items-center gap-2">
+                <div
+                  className={cn(
+                    "inline-flex h-9 items-center gap-2 rounded-full",
+                    "border border-white/10 bg-black/40 px-3",
+                    "shadow-sm backdrop-blur-xl supports-backdrop-filter:bg-black/30"
+                  )}
+                >
+                  <MessageSquareIcon className="size-3.5 shrink-0 text-foreground/80" />
+                  <span className="text-xs font-semibold tracking-tight text-foreground">
+                    Chat
+                  </span>
+                </div>
+
+                <span
+                  aria-hidden
+                  className="h-4 w-px shrink-0 bg-white/20"
+                />
+
+                <div
+                  className={cn(
+                    "inline-flex h-9 items-center rounded-full",
+                    "border border-white/10 bg-black/40 px-3",
+                    "shadow-sm backdrop-blur-xl supports-backdrop-filter:bg-black/30"
+                  )}
+                >
+                  <span className="text-xs text-muted-foreground">
+                    Streaming · low latency
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <ArtifactsButton />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={cn(
+                        "inline-flex h-9 shrink-0 items-center rounded-xl",
+                        "border border-white/10 bg-black/45 px-3",
+                        "shadow-sm backdrop-blur-xl supports-backdrop-filter:bg-black/35",
+                        "bg-linear-to-br from-sky-500/10 via-transparent to-transparent"
+                      )}
+                    >
+                      <span className="font-mono text-xs tabular-nums leading-none tracking-tight text-foreground/90">
+                        {displayRemainingMs != null
+                          ? formatRemaining(displayRemainingMs)
+                          : "…"}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {sessionData?.expiresAt
+                      ? "Time left before this chat is auto-deleted"
+                      : `Chats are kept for ${sessionData?.retentionDays ?? 7} days`}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={
+              empty
+                ? "flex flex-1 items-center justify-center"
+                : cn(
+                    "flex-1 space-y-4 px-1 py-4",
+                    pdfOpen
+                      ? "min-h-0 overflow-y-auto pb-4"
+                      : "overflow-y-auto pb-24"
+                  )
+            }
+          >
+            {isLoading && (
+              <div className="mx-auto w-full max-w-2xl space-y-3 px-1 py-6">
+                <Skeleton className="ml-auto h-11 w-[45%] rounded-2xl" />
+                <Skeleton className="h-16 w-[70%] rounded-2xl" />
+                <Skeleton className="ml-auto h-10 w-[35%] rounded-2xl" />
+                <Skeleton className="h-24 w-[80%] rounded-2xl" />
+              </div>
+            )}
+            {empty && (
+              <EmptyChat
+                title="No chat yet"
+                description="Send a message to start or pick a session from the sidebar."
               />
-
-              <div
-                className={cn(
-                  "inline-flex h-9 items-center rounded-full",
-                  "border border-white/10 bg-black/40 px-3",
-                  "shadow-sm backdrop-blur-xl supports-backdrop-filter:bg-black/30"
-                )}
-              >
-                <span className="text-xs text-muted-foreground">
-                  Streaming · low latency
-                </span>
-              </div>
-            </div>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className={cn(
-                    "inline-flex h-9 shrink-0 items-center rounded-xl",
-                    "border border-white/10 bg-black/45 px-3",
-                    "shadow-sm backdrop-blur-xl supports-backdrop-filter:bg-black/35",
-                    "bg-linear-to-br from-sky-500/10 via-transparent to-transparent"
-                  )}
-                >
-                  <span className="font-mono text-xs tabular-nums leading-none tracking-tight text-foreground/90">
-                    {displayRemainingMs != null
-                      ? formatRemaining(displayRemainingMs)
-                      : "…"}
-                  </span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {sessionData?.expiresAt
-                  ? "Time left before this chat is auto-deleted"
-                  : `Chats are kept for ${sessionData?.retentionDays ?? 7} days`}
-              </TooltipContent>
-            </Tooltip>
+            )}
+            {messages.map((m) => (
+              <ChatMessage
+                key={m.id}
+                message={m}
+                busy={busy}
+                onEdit={editPrompt}
+                onRegenerate={regenerate}
+              />
+            ))}
+            <div ref={bottomRef} />
           </div>
-        </div>
 
-        <div
-          className={
-            empty
-              ? "flex flex-1 items-center justify-center"
-              : "flex-1 space-y-4 overflow-y-auto px-1 py-4 pb-24"
-          }
-        >
-          {isLoading && (
-            <div className="mx-auto w-full max-w-2xl space-y-3 px-1 py-6">
-              <Skeleton className="ml-auto h-11 w-[45%] rounded-2xl" />
-              <Skeleton className="h-16 w-[70%] rounded-2xl" />
-              <Skeleton className="ml-auto h-10 w-[35%] rounded-2xl" />
-              <Skeleton className="h-24 w-[80%] rounded-2xl" />
-            </div>
-          )}
-          {empty && (
-            <EmptyChat
-              title="No chat yet"
-              description="Send a message to start or pick a session from the sidebar."
+          <div className={cn("z-40", pdfOpen ? "shrink-0" : "sticky bottom-0")}>
+            <ChatMessageInput
+              value={input}
+              onChange={setInput}
+              onSend={() => void send()}
+              disabled={busy}
             />
-          )}
-          {messages.map((m) => (
-            <ChatMessage
-              key={m.id}
-              message={m}
-              busy={busy}
-              onEdit={editPrompt}
-              onRegenerate={regenerate}
-            />
-          ))}
-          <div ref={bottomRef} />
-        </div>
-
-        <div className="sticky bottom-0 z-40">
-          <ChatMessageInput
-            value={input}
-            onChange={setInput}
-            onSend={() => void send()}
-            disabled={busy}
-          />
+          </div>
         </div>
       </div>
+
+      <PdfViewerPanel splitRef={splitRef} />
     </div>
   );
 }

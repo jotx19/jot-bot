@@ -26,6 +26,7 @@ import {
   clearLibraryCache,
 } from './tools/sandbox/library.js';
 import { runChatTurn } from './core/runtime.js';
+import { getExport, listExports, deleteExport, clearExports } from './tools/resume-pdf.js';
 import { normalizeDiscordId, getDiscordInviteUrl } from './core/users.js';
 import { runWithLlmCredentials, credsFromUserDoc } from './core/llm-context.js';
 import { PUBLIC_ERROR, logAndPublicError } from './core/errors.js';
@@ -295,6 +296,9 @@ app.get('/api/integrations/google-health/callback', async (req, res) => {
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/')) return next();
   if (req.path.startsWith('/integrations/google-health/callback')) return next();
+  // Resume PDF downloads use unguessable ids; allow without session so
+  // markdown / Discord links work across API origins.
+  if (req.path.startsWith('/exports/resume/')) return next();
   return requireAuth(req, res, next);
 });
 
@@ -553,6 +557,103 @@ app.get('/health', (_req, res) => {
     mongodb: getMongoStatus(),
     qdrant: getQdrantStatus(),
   });
+});
+
+function resolveApiPublicUrl(req) {
+  const env =
+    process.env.API_PUBLIC_URL ||
+    process.env.PUBLIC_API_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    '';
+  if (String(env).trim()) return String(env).replace(/\/+$/, '');
+  const host = req.get('host');
+  if (!host) return '';
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
+  return `${proto}://${host}`.replace(/\/+$/, '');
+}
+
+/** List temp resume PDF artifacts for the signed-in user. */
+app.get('/api/artifacts', async (req, res) => {
+  try {
+    const userId = req.auth?.userId || null;
+    const artifacts = listExports({ userId }).map((a) => ({
+      ...a,
+      downloadUrl: `${resolveApiPublicUrl(req)}${a.url}`,
+    }));
+    return res.json({ artifacts, ttlHours: 24 });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || PUBLIC_ERROR });
+  }
+});
+
+/** Delete one artifact. */
+app.delete('/api/artifacts/:id', async (req, res) => {
+  try {
+    const userId = req.auth?.userId || null;
+    const result = deleteExport(req.params.id, { userId });
+    if (!result.ok && result.reason === 'not_found') {
+      return res.status(404).json({ error: 'Artifact not found or expired' });
+    }
+    if (!result.ok && result.reason === 'forbidden') {
+      return res.status(403).json({ error: 'Not allowed' });
+    }
+    return res.json({ ok: true, id: req.params.id });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || PUBLIC_ERROR });
+  }
+});
+
+/** Clear all temp resume artifacts for this user. */
+app.delete('/api/artifacts', async (req, res) => {
+  try {
+    const userId = req.auth?.userId || null;
+    const result = clearExports({ userId });
+    return res.json({ ok: true, deleted: result.deleted });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || PUBLIC_ERROR });
+  }
+});
+
+/** Download a generated resume PDF (unguessable id; expires in 24h). */
+app.get('/api/exports/resume/:id', async (req, res) => {
+  try {
+    const meta = getExport(req.params.id);
+    if (!meta) {
+      return res.status(404).json({ error: 'File not found or expired' });
+    }
+    const fileName = String(meta.fileName || 'resume.pdf').replace(/"/g, '');
+    const asDownload =
+      req.query.download === '1' ||
+      req.query.download === 'true' ||
+      req.query.dl === '1';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${asDownload ? 'attachment' : 'inline'}; filename="${fileName}"`
+    );
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    // Allow embedding in the Next.js chat PDF viewer (cross-origin APP_URL).
+    res.removeHeader('X-Frame-Options');
+    const ancestors = [
+      ...String(process.env.APP_URL || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      ...String(process.env.CLIENT_URL || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      "'self'",
+    ].map((u) => u.replace(/\/+$/, ''));
+    const unique = [...new Set(ancestors)];
+    res.setHeader(
+      'Content-Security-Policy',
+      `frame-ancestors ${unique.join(' ')}`
+    );
+    return res.sendFile(meta.path);
+  } catch (err) {
+    return res.status(500).json({ error: err.message || PUBLIC_ERROR });
+  }
 });
 
 app.get('/api/tools', (_req, res) => {
@@ -981,6 +1082,8 @@ app.post('/api/chat', async (req, res) => {
       wantStream === true ||
       req.headers.accept === 'text/event-stream';
 
+    const apiPublicUrl = resolveApiPublicUrl(req);
+
     return runWithLlmCredentials(llmCreds, async () => {
       if (useSSE) {
         res.setHeader('Content-Type', 'text/event-stream');
@@ -995,6 +1098,8 @@ app.post('/api/chat', async (req, res) => {
           sessionId,
           channel: 'web',
           preferTool,
+          userId,
+          apiPublicUrl,
           onToken: (chunk) => {
             fullReply += chunk;
             res.write(`data: ${JSON.stringify({ type: 'token', content: chunk })}\n\n`);
@@ -1023,6 +1128,9 @@ app.post('/api/chat', async (req, res) => {
             intent: result.intent,
             reply: finalReply,
             toolUsed: result.toolUsed ?? null,
+            downloadUrl: result.downloadUrl ?? null,
+            downloadPath: result.downloadPath ?? null,
+            fileName: result.fileName ?? null,
             task: turn.task,
           })}\n\n`
         );
@@ -1035,6 +1143,8 @@ app.post('/api/chat', async (req, res) => {
         sessionId,
         channel: 'web',
         preferTool,
+        userId,
+        apiPublicUrl,
       });
 
       if (!turn.ok) {
@@ -1051,6 +1161,9 @@ app.post('/api/chat', async (req, res) => {
         intent: result.intent,
         reply: result.reply,
         toolUsed: result.toolUsed ?? null,
+        downloadUrl: result.downloadUrl ?? null,
+        downloadPath: result.downloadPath ?? null,
+        fileName: result.fileName ?? null,
         task: turn.task,
       });
     });

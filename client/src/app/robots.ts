@@ -16,7 +16,6 @@ export default function robots(): MetadataRoute.Robots {
           "/integrations",
           "/settings",
           "/scheduled",
-          "/cron-jobs",
           "/api/",
         ],
       },

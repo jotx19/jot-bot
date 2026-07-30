@@ -15,6 +15,9 @@ export async function streamChat(opts: {
     intent?: string;
     reply?: string;
     toolUsed?: string | null;
+    downloadUrl?: string | null;
+    downloadPath?: string | null;
+    fileName?: string | null;
   }) => void;
   onError: (err: string) => void;
 }) {

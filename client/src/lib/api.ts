@@ -175,5 +175,7 @@ export type UiMessage = {
   content: string;
   intent?: string | null;
   toolUsed?: string | null;
+  downloadUrl?: string | null;
+  fileName?: string | null;
   streaming?: boolean;
 };

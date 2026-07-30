@@ -59,6 +59,7 @@ import {
   materializeOnDisk,
 } from '../tools/sandbox/store.js';
 import { runScript } from '../tools/sandbox/runner.js';
+import { isResumePdfRequest, handleResumePdf } from '../tools/resume-pdf.js';
 
 /** Valid intent labels returned by classifyIntent */
 export const INTENTS = ['CHAT', 'RECALL', 'LEARN', 'TASK', 'SEARCH'];
@@ -69,6 +70,7 @@ CHAT   - casual conversation, opinions, general knowledge the model already know
 RECALL - asking about past conversation or memory
 LEARN  - wants the bot to remember something
 TASK   - wants a specific tool action (calculate, summarize URL,
+         tailor/export a resume PDF,
          list/pause/resume/change-interval sandbox scripts, list/read files or folders via MCP,
          create/update Notion pages via MCP,
          call any connected MCP integration)
@@ -980,6 +982,7 @@ function normalizePreferTool(raw) {
   if (t === 'notion') return 'notion';
   if (t === 'sandbox') return 'sandbox';
   if (t === 'health' || t === 'fitbit' || t === 'fitness') return 'health';
+  if (t === 'resume' || t === 'resume-pdf' || t === 'cv' || t === 'pdf') return 'resume';
   return null;
 }
 
@@ -1015,6 +1018,15 @@ export async function routeMessage(message, history = [], options = {}) {
   if (preferTool === 'health') {
     console.log(`[intent] PREFER health — session ${options.sessionId || 'none'}`);
     return handleHealthTask(message, history, options);
+  }
+  if (preferTool === 'resume') {
+    console.log(`[intent] PREFER resume — session ${options.sessionId || 'none'}`);
+    return handleResumePdf(message, history, options);
+  }
+
+  if (isResumePdfRequest(message)) {
+    console.log(`[intent] RESUME_PDF — session ${options.sessionId || 'none'}`);
+    return handleResumePdf(message, history, options);
   }
 
   if (isLikelyHealthTaskRequest(message)) {

@@ -10,13 +10,14 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-export type ChatPreferTool = "websearch" | "notion" | "sandbox" | "health";
+export type ChatPreferTool = "websearch" | "notion" | "sandbox" | "health" | "resume";
 
 const TOOLS: { id: ChatPreferTool; label: string }[] = [
   { id: "websearch", label: "websearch" },
   { id: "notion", label: "notion" },
   { id: "sandbox", label: "sandbox" },
   { id: "health", label: "health" },
+  { id: "resume", label: "resume" },
 ];
 
 interface ChatMessageInputProps {

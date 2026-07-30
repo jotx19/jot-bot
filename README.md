@@ -11,7 +11,7 @@ No SaaS subscription: bring your own [OpenRouter](https://openrouter.ai) key (fr
 | **Chat** | Web UI + Discord (@mention / DM) |
 | **Memory** | Graph facts in MongoDB; optional Qdrant vector RAG |
 | **Search** | Live web / stocks / Wikipedia via Serper, Yahoo, DuckDuckGo |
-| **Tools** | Calculator, URL summarize, recruiter email lookup, per-user MCP servers |
+| **Tools** | Calculator, URL summarize, recruiter email lookup, tailored resume PDF, per-user MCP servers |
 | **Automation** | Connect a remote script library; install, schedule, pause, change interval, Discord notify |
 | **Accounts** | Register / login; chats scoped per user |
 | **Settings UI** | Discord, Automation library URL, MCP — no `.env` for those |

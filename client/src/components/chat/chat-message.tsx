@@ -4,12 +4,21 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   CheckIcon,
   CopyIcon,
+  DownloadIcon,
+  FileTextIcon,
   PencilIcon,
   RefreshCwIcon,
 } from "lucide-react";
 import type { UiMessage } from "@/lib/api";
+import {
+  extractPdfFromContent,
+  guessPdfFileName,
+  resolvePdfHref,
+  withDownloadParam,
+} from "@/lib/pdf-export";
 import { formatMessageMeta } from "@/lib/tool-label";
 import { cn } from "@/lib/utils";
+import { useChatUiStore } from "@/stores/app-store";
 import { ChatMarkdown } from "@/components/chat/markdown";
 import { SolvingIndicator } from "@/components/chat/solving-indicator";
 import {
@@ -23,6 +32,14 @@ interface ChatMessageProps {
   busy?: boolean;
   onEdit?: (messageId: string) => void;
   onRegenerate?: (messageId: string) => void;
+}
+
+function stripPdfDownloadLines(content: string): string {
+  return content
+    .replace(/\[(?:Download(?:\s+resume)?\s+PDF|[^\]]+\.pdf)\]\([^)]+\)/gi, "")
+    .replace(/_Link expires in 24 hours\._/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function ActionButton({
@@ -59,6 +76,70 @@ function ActionButton({
   );
 }
 
+function PdfFileCard({
+  url,
+  fileName,
+}: {
+  url: string;
+  fileName: string;
+}) {
+  const openPdfViewer = useChatUiStore((s) => s.openPdfViewer);
+  const pdfDoc = useChatUiStore((s) => s.pdfDoc);
+  const pdfOpen = useChatUiStore((s) => s.pdfOpen);
+  const active = pdfOpen && pdfDoc?.url === url;
+
+  return (
+    <div
+      className={cn(
+        "mt-1.5 flex w-full max-w-sm items-stretch overflow-hidden rounded-xl",
+        "border border-border/70 bg-background shadow-sm",
+        "dark:bg-neutral-900/80",
+        active && "ring-1 ring-foreground/20"
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => openPdfViewer({ url, fileName })}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left",
+          "transition-colors hover:bg-muted/60"
+        )}
+      >
+        <span
+          className={cn(
+            "inline-flex size-9 shrink-0 items-center justify-center rounded-lg",
+            "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+          )}
+        >
+          <FileTextIcon className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium text-foreground">
+            {fileName}
+          </span>
+          <span className="block text-[11px] text-muted-foreground">
+            PDF · Click to preview
+          </span>
+        </span>
+      </button>
+      <a
+        href={withDownloadParam(url)}
+        download={fileName}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Download PDF"
+        className={cn(
+          "inline-flex shrink-0 items-center border-l border-border/60 px-3",
+          "text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <DownloadIcon className="size-4" />
+      </a>
+    </div>
+  );
+}
+
 export function ChatMessage({
   message,
   busy = false,
@@ -79,6 +160,17 @@ export function ChatMessage({
     !isUser && !message.streaming
       ? formatMessageMeta(message.intent, message.toolUsed)
       : "";
+  const pdfUrl = !isUser
+    ? resolvePdfHref(message.downloadUrl) ||
+      (message.toolUsed === "resume-pdf" ||
+      /\/api\/exports\/resume\//i.test(body)
+        ? extractPdfFromContent(body)
+        : null)
+    : null;
+  const pdfName = pdfUrl
+    ? guessPdfFileName(message.fileName, body)
+    : null;
+  const displayBody = pdfUrl ? stripPdfDownloadLines(body) : body;
 
   useEffect(() => {
     if (!copied) return;
@@ -157,12 +249,16 @@ export function ChatMessage({
               maxHeight: showFull || !isLong ? "none" : "11rem",
             }}
           >
-            <ChatMarkdown content={body} />
+            <ChatMarkdown content={displayBody} />
             {!showFull && isLong && (
               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-linear-to-t from-muted/95 to-transparent dark:from-neutral-800" />
             )}
           </div>
         )}
+
+        {pdfUrl && pdfName && assistantDone ? (
+          <PdfFileCard url={pdfUrl} fileName={pdfName} />
+        ) : null}
 
         {!isUser && !waiting && !showFull && isLong && (
           <button
@@ -192,7 +288,7 @@ export function ChatMessage({
             {meta ? (
               <span
                 className={cn(
-                  "mr-0.5 inline-flex max-w-[14rem] items-center truncate rounded-md px-1.5 py-0.5",
+                  "mr-0.5 inline-flex max-w-56 items-center truncate rounded-md px-1.5 py-0.5",
                   "text-[10px] font-medium tracking-wide text-muted-foreground/80 uppercase"
                 )}
               >

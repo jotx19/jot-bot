@@ -1,5 +1,7 @@
 node_modules/
 .env
+tmp/
+.venv/
 tools/*.generated.js
 tools/sandbox/state/scheduled.json
 tools/sandbox/state/*.json
