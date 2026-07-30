@@ -198,7 +198,7 @@ export default function AutomationPage() {
     },
   });
 
-  const scripts = data?.scripts ?? [];
+  const scripts = useMemo(() => data?.scripts ?? [], [data?.scripts]);
   const installedNames = useMemo(
     () => new Set(scripts.map((s) => s.name)),
     [scripts]
@@ -213,7 +213,10 @@ export default function AutomationPage() {
   };
   const libraryUrl =
     settingsQuery.data?.user?.settings?.automationLibraryUrl || "";
-  const libraryScripts = libraryQuery.data?.scripts ?? [];
+  const libraryScripts = useMemo(
+    () => libraryQuery.data?.scripts ?? [],
+    [libraryQuery.data?.scripts]
+  );
   const libraryConnected = Boolean(
     libraryQuery.data?.connected && libraryUrl
   );

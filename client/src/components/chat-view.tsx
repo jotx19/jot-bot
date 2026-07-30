@@ -77,7 +77,6 @@ export function ChatView() {
   const openPdfViewer = useChatUiStore((s) => s.openPdfViewer);
   const closePdfViewer = useChatUiStore((s) => s.closePdfViewer);
   const pdfOpen = useChatUiStore((s) => s.pdfOpen);
-  const pdfExpanded = useChatUiStore((s) => s.pdfExpanded);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);

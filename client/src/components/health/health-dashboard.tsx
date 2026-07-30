@@ -546,7 +546,10 @@ export function HealthDashboard({ snap }: { snap: HealthSnapshot }) {
   const active = snap.activity?.activeMinutes ?? 0;
   const steps = snap.activity?.steps ?? 0;
   const sleepMin = snap.sleep?.minutesAsleep ?? null;
-  const heartHourly = snap.charts?.heartHourly || [];
+  const heartHourly = useMemo(
+    () => snap.charts?.heartHourly || [],
+    [snap.charts?.heartHourly]
+  );
   const chartBpms = useMemo(
     () =>
       heartHourly
@@ -567,7 +570,10 @@ export function HealthDashboard({ snap }: { snap: HealthSnapshot }) {
   const maxBpm = snap.heart?.maxBpm ?? chartMax;
   const bpm =
     snap.heart?.restingBpm ?? snap.heart?.avgBpm ?? chartLatest ?? chartAvg ?? null;
-  const weekSteps = snap.charts?.weekSteps || [];
+  const weekSteps = useMemo(
+    () => snap.charts?.weekSteps || [],
+    [snap.charts?.weekSteps]
+  );
   const primaryExercise = snap.exercises?.[0];
 
   const weekBars = useMemo(() => {
